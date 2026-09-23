@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
@@ -13,7 +13,7 @@ export default function SignUpPage() {
 
   const router = useRouter();
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -27,7 +27,6 @@ export default function SignUpPage() {
 
     if (error) {
       setError(error.message ?? "Sign-up unsuccessful.");
-      setIsLoading(false);
       return;
     }
 

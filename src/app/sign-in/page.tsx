@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -12,7 +12,7 @@ export default function SignInPage() {
 
   const router = useRouter();
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -25,7 +25,6 @@ export default function SignInPage() {
 
     if (error) {
       setError(error.message ?? "Sign-in unsuccessful.");
-      setIsLoading(false);
       return;
     }
 
@@ -55,7 +54,6 @@ export default function SignInPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
             required
           />
         </div>
