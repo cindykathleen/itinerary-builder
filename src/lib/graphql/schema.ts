@@ -44,12 +44,16 @@ export const schema = createSchema({
     }
 
     type Query {
-      itineraries: [Itinerary!]!
+      itineraries(status: ItineraryStatus!): [Itinerary!]!
     }
   `,
   resolvers: {
     Query: {
-      itineraries: async (_parent, _args, context: GraphQLContext) => {
+      itineraries: async (
+        _parent,
+        args: { status: ItineraryRow["status"] },
+        context: GraphQLContext,
+      ) => {
         if (!context.userId) {
           throw new GraphQLError("You must be signed in to view itineraries.", {
             extensions: { code: "UNAUTHENTICATED" },
@@ -65,9 +69,9 @@ export const schema = createSchema({
              date_end::text AS date_end,
              status
            FROM itineraries
-           WHERE owner_id = $1
+           WHERE owner_id = $1 AND status = $2
            ORDER BY date_start DESC, created_at DESC`,
-          [context.userId],
+          [context.userId, args.status],
         );
 
         return result.rows.map((row) => ({

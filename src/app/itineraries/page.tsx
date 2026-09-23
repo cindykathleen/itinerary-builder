@@ -1,8 +1,9 @@
 import { executeGraphQL } from "@/lib/graphql/execute";
+import ItinerariesSidebar, { type ItineraryListStatus } from "./ItinerariesSidebar";
 
 const itinerariesQuery = /* GraphQL */ `
-  query MyItineraries {
-    itineraries {
+  query MyItineraries($status: ItineraryStatus!) {
+    itineraries(status: $status) {
       id
       name
       destination
@@ -20,33 +21,67 @@ type ItinerariesQuery = {
     destination: string;
     dateStart: string;
     dateEnd: string;
-    status: "active" | "archived" | "trashed";
+    status: ItineraryListStatus;
   }[];
 };
 
-export default async function ItinerariesPage() {
-  const { itineraries } = await executeGraphQL<ItinerariesQuery>(itinerariesQuery);
+const headings: Record<ItineraryListStatus, string> = {
+  active: "My itineraries",
+  archived: "Archived",
+  trashed: "Trash",
+};
+
+const emptyMessages: Record<ItineraryListStatus, string> = {
+  active: "Your itineraries will appear here.",
+  archived: "No archived itineraries.",
+  trashed: "No itineraries in trash.",
+};
+
+function parseStatus(
+  value: string | string[] | undefined,
+): ItineraryListStatus {
+  const status = Array.isArray(value) ? value[0] : value;
+
+  if (status === "archived" || status === "trashed") {
+    return status;
+  }
+
+  return "active";
+}
+
+export default async function ItinerariesPage({
+  searchParams,
+}: PageProps<"/itineraries">) {
+  const { status: statusParam } = await searchParams;
+  const status = parseStatus(statusParam);
+  const { itineraries } = await executeGraphQL<ItinerariesQuery>(
+    itinerariesQuery,
+    { status },
+  );
 
   return (
     <main>
-      <h1>My itineraries</h1>
+      <ItinerariesSidebar currentStatus={status} />
 
-      {itineraries.length === 0 ? (
-        <p>Your itineraries will appear here.</p>
-      ) : (
-        <ul>
-          {itineraries.map((itinerary) => (
-            <li key={itinerary.id}>
-              <h2>{itinerary.name}</h2>
-              <p>{itinerary.destination}</p>
-              <p>
-                {itinerary.dateStart} – {itinerary.dateEnd}
-              </p>
-              <p>{itinerary.status}</p>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section>
+        <h1>{headings[status]}</h1>
+
+        {itineraries.length === 0 ? (
+          <p>{emptyMessages[status]}</p>
+        ) : (
+          <ul>
+            {itineraries.map((itinerary) => (
+              <li key={itinerary.id}>
+                <h2>{itinerary.name}</h2>
+                <p>{itinerary.destination}</p>
+                <p>
+                  {itinerary.dateStart} – {itinerary.dateEnd}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
