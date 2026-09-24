@@ -1,6 +1,7 @@
 import { graphql } from "graphql";
 import { headers } from "next/headers";
-import { createContext, schema } from "./schema";
+import { createContext } from "./context";
+import { schema } from "./schema";
 
 export async function executeGraphQL<TData>(
   source: string,

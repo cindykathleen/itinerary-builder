@@ -1,11 +1,7 @@
 import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
-import { auth } from "@/lib/auth";
 import pool from "@/lib/db";
-
-export type GraphQLContext = {
-  userId: string | null;
-};
+import type { GraphQLContext } from "./context";
 
 type ItineraryRow = {
   id: string;
@@ -15,16 +11,6 @@ type ItineraryRow = {
   date_end: string;
   status: "active" | "archived" | "trashed";
 };
-
-export async function createContext(requestHeaders: Headers): Promise<GraphQLContext> {
-  const session = await auth.api.getSession({
-    headers: requestHeaders,
-  });
-
-  return {
-    userId: session?.user.id ?? null,
-  };
-}
 
 export const schema = createSchema({
   typeDefs: /* GraphQL */ `

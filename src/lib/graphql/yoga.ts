@@ -1,5 +1,6 @@
 import { createYoga } from "graphql-yoga";
-import { createContext, schema } from "./schema";
+import { createContext } from "./context";
+import { schema } from "./schema";
 
 export const yoga = createYoga({
   schema,
