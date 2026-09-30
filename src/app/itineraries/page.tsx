@@ -1,4 +1,5 @@
 import { executeGraphQL } from "@/lib/graphql/execute";
+import ItinerariesGrid from "./ItinerariesGrid";
 import ItinerariesSidebar, { type ItineraryListStatus } from "./ItinerariesSidebar";
 
 const itinerariesQuery = /* GraphQL */ `
@@ -31,12 +32,6 @@ const headings: Record<ItineraryListStatus, string> = {
   trashed: "Trash",
 };
 
-const emptyMessages: Record<ItineraryListStatus, string> = {
-  active: "Your itineraries will appear here.",
-  archived: "No archived itineraries.",
-  trashed: "No itineraries in trash.",
-};
-
 function parseStatus(
   value: string | string[] | undefined,
 ): ItineraryListStatus {
@@ -65,22 +60,7 @@ export default async function ItinerariesPage({
 
       <section>
         <h1>{headings[status]}</h1>
-
-        {itineraries.length === 0 ? (
-          <p>{emptyMessages[status]}</p>
-        ) : (
-          <ul>
-            {itineraries.map((itinerary) => (
-              <li key={itinerary.id}>
-                <h2>{itinerary.name}</h2>
-                <p>{itinerary.destination}</p>
-                <p>
-                  {itinerary.dateStart} – {itinerary.dateEnd}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ItinerariesGrid itineraries={itineraries} status={status} />
       </section>
     </main>
   );
