@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ItineraryCreate from "./ItineraryCreate";
 
 export type ItineraryListStatus = "active" | "archived" | "trashed";
 
@@ -15,6 +16,7 @@ export default function ItinerariesSidebar({
 }) {
   return (
     <aside>
+      <ItineraryCreate />
       <nav>
         <ul>
           {filters.map((filter) => (

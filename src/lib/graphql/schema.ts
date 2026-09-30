@@ -35,6 +35,22 @@ const itineraryColumns = `
   photo_url
 `;
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseIsoDate(value: string) {
+  if (!DATE_PATTERN.test(value)) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00Z`);
+
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    return null;
+  }
+
+  return value;
+}
+
 export const schema = createSchema({
   typeDefs: /* GraphQL */ `
     enum ItineraryStatus {
@@ -58,6 +74,12 @@ export const schema = createSchema({
     }
 
     type Mutation {
+      createItinerary(
+        name: String!
+        destination: String!
+        dateStart: String!
+        dateEnd: String!
+      ): Itinerary!
       updateItineraryStatus(id: ID!, status: ItineraryStatus!): Itinerary!
       renameItinerary(id: ID!, name: String!): Itinerary!
       deleteItinerary(id: ID!): Boolean!
@@ -88,6 +110,74 @@ export const schema = createSchema({
       },
     },
     Mutation: {
+      createItinerary: async (
+        _parent,
+        args: {
+          name: string;
+          destination: string;
+          dateStart: string;
+          dateEnd: string;
+        },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to create itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const destination = args.destination.trim();
+        const dateStart = parseIsoDate(args.dateStart);
+        const dateEnd = parseIsoDate(args.dateEnd);
+
+        if (!name) {
+          throw new GraphQLError("Itinerary name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!destination) {
+          throw new GraphQLError("Itinerary destination is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!dateStart || !dateEnd) {
+          throw new GraphQLError("A valid start and end date are required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (dateStart > dateEnd) {
+          throw new GraphQLError("Start date must be on or before the end date.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const result = await pool.query<ItineraryRow>(
+          `INSERT INTO itineraries (
+             owner_id,
+             name,
+             destination,
+             date_start,
+             date_end,
+             day_start,
+             day_end,
+             time_interval,
+             time_format,
+             timezone
+           )
+           VALUES (
+             $1, $2, $3, $4::date, $5::date,
+             TIME '09:00', TIME '21:00', 30, '12h', 'UTC'
+           )
+           RETURNING ${itineraryColumns}`,
+          [context.userId, name, destination, dateStart, dateEnd],
+        );
+
+        return toItinerary(result.rows[0]);
+      },
       updateItineraryStatus: async (
         _parent,
         args: { id: string; status: ItineraryRow["status"] },

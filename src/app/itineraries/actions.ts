@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
 
 const updateItineraryStatusMutation = /* GraphQL */ `
@@ -62,4 +63,38 @@ export async function renameItinerary(formData: FormData) {
 
   await executeGraphQL(renameItineraryMutation, { id, name });
   revalidatePath("/itineraries");
+}
+
+const createItineraryMutation = /* GraphQL */ `
+  mutation CreateItinerary(
+    $name: String!
+    $destination: String!
+    $dateStart: String!
+    $dateEnd: String!
+  ) {
+    createItinerary(
+      name: $name
+      destination: $destination
+      dateStart: $dateStart
+      dateEnd: $dateEnd
+    ) {
+      id
+    }
+  }
+`;
+
+export async function createItinerary(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const destination = String(formData.get("destination") ?? "").trim();
+  const dateStart = String(formData.get("dateStart") ?? "");
+  const dateEnd = String(formData.get("dateEnd") ?? "");
+
+  await executeGraphQL(createItineraryMutation, {
+    name,
+    destination,
+    dateStart,
+    dateEnd,
+  });
+  revalidatePath("/itineraries");
+  redirect("/itineraries");
 }
