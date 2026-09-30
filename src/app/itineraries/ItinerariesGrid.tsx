@@ -1,12 +1,5 @@
 import type { ItineraryListStatus } from "./ItinerariesSidebar";
-
-export type ItineraryCard = {
-  id: string;
-  name: string;
-  destination: string;
-  dateStart: string;
-  dateEnd: string;
-};
+import ItineraryCard, { type ItineraryCardData } from "./ItineraryCard";
 
 const emptyMessages: Record<ItineraryListStatus, string> = {
   active: "Your itineraries will appear here.",
@@ -18,7 +11,7 @@ export default function ItinerariesGrid({
   itineraries,
   status,
 }: {
-  itineraries: ItineraryCard[];
+  itineraries: ItineraryCardData[];
   status: ItineraryListStatus;
 }) {
   if (itineraries.length === 0) {
@@ -29,13 +22,7 @@ export default function ItinerariesGrid({
     <ul>
       {itineraries.map((itinerary) => (
         <li key={itinerary.id}>
-          <article>
-            <h2>{itinerary.name}</h2>
-            <p>{itinerary.destination}</p>
-            <p>
-              {itinerary.dateStart} – {itinerary.dateEnd}
-            </p>
-          </article>
+          <ItineraryCard itinerary={itinerary} status={status} />
         </li>
       ))}
     </ul>

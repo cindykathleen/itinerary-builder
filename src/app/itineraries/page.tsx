@@ -7,10 +7,7 @@ const itinerariesQuery = /* GraphQL */ `
     itineraries(status: $status) {
       id
       name
-      destination
-      dateStart
-      dateEnd
-      status
+      photoUrl
     }
   }
 `;
@@ -19,10 +16,7 @@ type ItinerariesQuery = {
   itineraries: {
     id: string;
     name: string;
-    destination: string;
-    dateStart: string;
-    dateEnd: string;
-    status: ItineraryListStatus;
+    photoUrl: string | null;
   }[];
 };
 

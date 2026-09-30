@@ -123,3 +123,13 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+dialog {
+  padding: 16px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+}
+
+dialog::backdrop {
+  background: rgba(26, 32, 44, 0.4);
+}
