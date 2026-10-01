@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:seed": "node --env-file=.env.local db/seed.mjs"
   },
   "dependencies": {
     "better-auth": "^1.7.4",
+    "graphql": "^16.14.2",
+    "graphql-yoga": "^5.24.1",
     "next": "16.3.4",
     "pg": "^8.23.0",
     "react": "19.2.8",
