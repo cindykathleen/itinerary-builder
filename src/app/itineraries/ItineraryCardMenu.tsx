@@ -10,6 +10,9 @@ import {
   renameItinerary,
   restoreItinerary,
 } from "./actions";
+import { closeDialogOnEscape } from "./dialog";
+import styles from "./ItineraryCardMenu.module.css";
+import dialogStyles from "./dialog.module.css";
 
 type ConfirmAction = (formData: FormData) => void | Promise<void>;
 
@@ -70,18 +73,25 @@ export default function ItineraryCardMenu({
 
   return (
     <>
-      <details ref={detailsRef}>
-        <summary aria-label={`Actions for ${name}`}>More</summary>
-        <ul>
+      <details ref={detailsRef} className={styles.menu}>
+        <summary className={styles.trigger} aria-label={`Actions for ${name}`}>
+          <span aria-hidden="true">⋮</span>
+        </summary>
+        <ul className={styles.dropdown}>
           {status === "active" ? (
             <>
               <li>
-                <button type="button" onClick={openRenameDialog}>
+                <button
+                  className={styles.action}
+                  type="button"
+                  onClick={openRenameDialog}
+                >
                   Rename
                 </button>
               </li>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(`Archive "${name}"?`, archiveItinerary)
@@ -92,6 +102,7 @@ export default function ItineraryCardMenu({
               </li>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(`Delete "${name}"?`, deleteItinerary)
@@ -107,6 +118,7 @@ export default function ItineraryCardMenu({
             <>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(`Restore "${name}"?`, restoreItinerary)
@@ -117,6 +129,7 @@ export default function ItineraryCardMenu({
               </li>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(`Delete "${name}"?`, deleteItinerary)
@@ -132,6 +145,7 @@ export default function ItineraryCardMenu({
             <>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(`Restore "${name}"?`, restoreItinerary)
@@ -142,6 +156,7 @@ export default function ItineraryCardMenu({
               </li>
               <li>
                 <button
+                  className={styles.action}
                   type="button"
                   onClick={() =>
                     openConfirm(
@@ -159,11 +174,19 @@ export default function ItineraryCardMenu({
       </details>
 
       {status === "active" ? (
-        <dialog ref={renameDialogRef} aria-labelledby={`rename-title-${id}`}>
-          <form action={saveRename}>
-            <div>
-              <h2 id={`rename-title-${id}`}>Rename itinerary</h2>
+        <dialog
+          ref={renameDialogRef}
+          className={dialogStyles.dialog}
+          aria-labelledby={`rename-title-${id}`}
+          onKeyDown={closeDialogOnEscape}
+        >
+          <form className={dialogStyles.form} action={saveRename}>
+            <div className={dialogStyles.header}>
+              <h2 id={`rename-title-${id}`} className={dialogStyles.title}>
+                Rename itinerary
+              </h2>
               <button
+                className={dialogStyles.close}
                 type="button"
                 aria-label="Close"
                 onClick={closeRenameDialog}
@@ -172,23 +195,33 @@ export default function ItineraryCardMenu({
               </button>
             </div>
 
-            <input type="hidden" name="id" value={id} />
-            <label htmlFor={`rename-${id}`}>Name</label>
-            <input
-              id={`rename-${id}`}
-              name="name"
-              type="text"
-              value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              maxLength={255}
-              required
-            />
+            <div className={dialogStyles.body}>
+              <input type="hidden" name="id" value={id} />
+              <div className={dialogStyles.field}>
+                <label htmlFor={`rename-${id}`}>Name</label>
+                <input
+                  id={`rename-${id}`}
+                  name="name"
+                  type="text"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  maxLength={255}
+                  required
+                />
+              </div>
+            </div>
 
-            <div>
-              <button type="button" onClick={closeRenameDialog}>
+            <div className={dialogStyles.actions}>
+              <button
+                className="secondary"
+                type="button"
+                onClick={closeRenameDialog}
+              >
                 Cancel
               </button>
-              <button type="submit">Save</button>
+              <button className="primary" type="submit">
+                Save
+              </button>
             </div>
           </form>
         </dialog>
@@ -196,20 +229,42 @@ export default function ItineraryCardMenu({
 
       <dialog
         ref={confirmDialogRef}
+        className={dialogStyles.dialog}
         aria-labelledby={`confirm-title-${id}`}
+        onKeyDown={closeDialogOnEscape}
         onClose={() => {
           pendingActionRef.current = null;
           setConfirmMessage("");
         }}
       >
-        <form action={submitConfirm}>
-          <p id={`confirm-title-${id}`}>{confirmMessage}</p>
+        <form className={dialogStyles.form} action={submitConfirm}>
+          <div className={dialogStyles.header}>
+            <p id={`confirm-title-${id}`} className={dialogStyles.title}>
+              {confirmMessage}
+            </p>
+            <button
+              className={dialogStyles.close}
+              type="button"
+              aria-label="Close"
+              onClick={closeConfirm}
+            >
+              ×
+            </button>
+          </div>
+
           <input type="hidden" name="id" value={id} />
-          <div>
-            <button type="button" onClick={closeConfirm}>
+
+          <div className={dialogStyles.actions}>
+            <button
+              className="secondary"
+              type="button"
+              onClick={closeConfirm}
+            >
               No
             </button>
-            <button type="submit">Yes</button>
+            <button className="primary" type="submit">
+              Yes
+            </button>
           </div>
         </form>
       </dialog>
