@@ -71,6 +71,7 @@ export const schema = createSchema({
 
     type Query {
       itineraries(status: ItineraryStatus!): [Itinerary!]!
+      itinerary(id: ID!): Itinerary
     }
 
     type Mutation {
@@ -107,6 +108,32 @@ export const schema = createSchema({
         );
 
         return result.rows.map(toItinerary);
+      },
+      itinerary: async (
+        _parent,
+        args: { id: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to view itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const result = await pool.query<ItineraryRow>(
+          `SELECT ${itineraryColumns}
+           FROM itineraries
+           WHERE id = $1 AND owner_id = $2`,
+          [args.id, context.userId],
+        );
+
+        const itinerary = result.rows[0];
+
+        if (!itinerary) {
+          return null;
+        }
+
+        return toItinerary(itinerary);
       },
     },
     Mutation: {
