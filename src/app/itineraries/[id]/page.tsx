@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
 import ItineraryViewToggle from "./ItineraryViewToggle";
 import styles from "./page.module.css";
 
@@ -8,6 +9,7 @@ const itineraryQuery = /* GraphQL */ `
     itinerary(id: $id) {
       id
       name
+      scheduleConfigured
     }
   }
 `;
@@ -16,6 +18,7 @@ type ItineraryQuery = {
   itinerary: {
     id: string;
     name: string;
+    scheduleConfigured: boolean;
   } | null;
 };
 
@@ -57,6 +60,10 @@ export default async function ItineraryPage({
         <section className={styles.side} aria-label="Activities" />
       ) : (
         <section className={styles.side} aria-label="Map" />
+      )}
+
+      {itinerary.scheduleConfigured ? null : (
+        <ItineraryScheduleSetup itineraryId={itinerary.id} />
       )}
     </main>
   );

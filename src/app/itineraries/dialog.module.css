@@ -85,7 +85,26 @@
   color: var(--text-secondary);
 }
 
-.dialog :is(input[type="text"], input[type="date"]) {
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.choice input {
+  width: auto;
+  margin: 0;
+}
+
+.dialog :is(input[type="text"], input[type="date"], input[type="time"]) {
   width: 100%;
   padding: 8px 16px;
   border: none;

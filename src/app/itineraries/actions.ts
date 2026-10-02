@@ -83,6 +83,40 @@ const createItineraryMutation = /* GraphQL */ `
   }
 `;
 
+const saveItineraryScheduleMutation = /* GraphQL */ `
+  mutation SaveItinerarySchedule(
+    $id: ID!
+    $dayStart: String!
+    $dayEnd: String!
+    $timeInterval: Int!
+  ) {
+    saveItinerarySchedule(
+      id: $id
+      dayStart: $dayStart
+      dayEnd: $dayEnd
+      timeInterval: $timeInterval
+    ) {
+      id
+      scheduleConfigured
+    }
+  }
+`;
+
+export async function saveItinerarySchedule(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const dayStart = String(formData.get("dayStart") ?? "");
+  const dayEnd = String(formData.get("dayEnd") ?? "");
+  const timeInterval = Number(formData.get("timeInterval"));
+
+  await executeGraphQL(saveItineraryScheduleMutation, {
+    id,
+    dayStart,
+    dayEnd,
+    timeInterval,
+  });
+  revalidatePath(`/itineraries/${id}`);
+}
+
 export async function createItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const destination = String(formData.get("destination") ?? "").trim();

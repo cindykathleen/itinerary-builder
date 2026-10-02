@@ -11,6 +11,7 @@ type ItineraryRow = {
   date_end: string;
   status: "active" | "archived" | "trashed";
   photo_url: string | null;
+  schedule_configured: boolean;
 };
 
 function toItinerary(row: ItineraryRow) {
@@ -22,6 +23,7 @@ function toItinerary(row: ItineraryRow) {
     dateEnd: row.date_end,
     status: row.status,
     photoUrl: row.photo_url,
+    scheduleConfigured: row.schedule_configured,
   };
 }
 
@@ -32,10 +34,12 @@ const itineraryColumns = `
   date_start::text AS date_start,
   date_end::text AS date_end,
   status,
-  photo_url
+  photo_url,
+  schedule_configured
 `;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function parseIsoDate(value: string) {
   if (!DATE_PATTERN.test(value)) {
@@ -49,6 +53,16 @@ function parseIsoDate(value: string) {
   }
 
   return value;
+}
+
+function parseTime(value: string) {
+  const time = value.trim().slice(0, 5);
+
+  if (!TIME_PATTERN.test(time)) {
+    return null;
+  }
+
+  return time;
 }
 
 export const schema = createSchema({
@@ -67,6 +81,7 @@ export const schema = createSchema({
       dateEnd: String!
       status: ItineraryStatus!
       photoUrl: String
+      scheduleConfigured: Boolean!
     }
 
     type Query {
@@ -83,6 +98,12 @@ export const schema = createSchema({
       ): Itinerary!
       updateItineraryStatus(id: ID!, status: ItineraryStatus!): Itinerary!
       renameItinerary(id: ID!, name: String!): Itinerary!
+      saveItinerarySchedule(
+        id: ID!
+        dayStart: String!
+        dayEnd: String!
+        timeInterval: Int!
+      ): Itinerary!
       deleteItinerary(id: ID!): Boolean!
     }
   `,
@@ -253,6 +274,66 @@ export const schema = createSchema({
            WHERE id = $2 AND owner_id = $3
            RETURNING ${itineraryColumns}`,
           [name, args.id, context.userId],
+        );
+
+        const itinerary = result.rows[0];
+
+        if (!itinerary) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return toItinerary(itinerary);
+      },
+      saveItinerarySchedule: async (
+        _parent,
+        args: {
+          id: string;
+          dayStart: string;
+          dayEnd: string;
+          timeInterval: number;
+        },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to update itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const dayStart = parseTime(args.dayStart);
+        const dayEnd = parseTime(args.dayEnd);
+        const timeInterval = args.timeInterval;
+
+        if (!dayStart || !dayEnd) {
+          throw new GraphQLError("A valid day start and day end are required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (dayStart >= dayEnd) {
+          throw new GraphQLError("Day end must be later than the day start.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (timeInterval !== 30 && timeInterval !== 60) {
+          throw new GraphQLError("Time interval must be 30 minutes or 1 hour.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const result = await pool.query<ItineraryRow>(
+          `UPDATE itineraries
+           SET day_start = $1::time,
+               day_end = $2::time,
+               time_interval = $3,
+               schedule_configured = true,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4 AND owner_id = $5
+           RETURNING ${itineraryColumns}`,
+          [dayStart, dayEnd, timeInterval, args.id, context.userId],
         );
 
         const itinerary = result.rows[0];
