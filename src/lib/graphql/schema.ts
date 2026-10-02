@@ -127,6 +127,16 @@ export const schema = createSchema({
         timeInterval: Int!
       ): Itinerary!
       saveItineraryDayHeading(id: ID!, date: String!, heading: String!): Boolean!
+      updateItinerary(
+        id: ID!
+        name: String!
+        destination: String!
+        dateStart: String!
+        dateEnd: String!
+        dayStart: String!
+        dayEnd: String!
+        timeInterval: Int!
+      ): Itinerary!
       deleteItinerary(id: ID!): Boolean!
     }
   `,
@@ -448,6 +458,113 @@ export const schema = createSchema({
         );
 
         return true;
+      },
+      updateItinerary: async (
+        _parent,
+        args: {
+          id: string;
+          name: string;
+          destination: string;
+          dateStart: string;
+          dateEnd: string;
+          dayStart: string;
+          dayEnd: string;
+          timeInterval: number;
+        },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to update itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const destination = args.destination.trim();
+        const dateStart = parseIsoDate(args.dateStart);
+        const dateEnd = parseIsoDate(args.dateEnd);
+        const dayStart = parseTime(args.dayStart);
+        const dayEnd = parseTime(args.dayEnd);
+        const timeInterval = args.timeInterval;
+
+        if (!name) {
+          throw new GraphQLError("Itinerary name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!dateStart || !dateEnd) {
+          throw new GraphQLError("A valid start and end date are required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (dateStart > dateEnd) {
+          throw new GraphQLError("Start date must be on or before the end date.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!dayStart || !dayEnd) {
+          throw new GraphQLError("A valid day start and day end are required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (dayStart >= dayEnd) {
+          throw new GraphQLError("Day end must be later than the day start.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (timeInterval !== 30 && timeInterval !== 60) {
+          throw new GraphQLError("Time interval must be 30 minutes or 1 hour.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const result = await pool.query<ItineraryRow>(
+          `UPDATE itineraries
+           SET name = $1,
+               destination = $2,
+               date_start = $3::date,
+               date_end = $4::date,
+               day_start = $5::time,
+               day_end = $6::time,
+               time_interval = $7,
+               schedule_configured = true,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $8 AND owner_id = $9
+           RETURNING ${itineraryColumns}`,
+          [
+            name,
+            destination,
+            dateStart,
+            dateEnd,
+            dayStart,
+            dayEnd,
+            timeInterval,
+            args.id,
+            context.userId,
+          ],
+        );
+
+        const itinerary = result.rows[0];
+
+        if (!itinerary) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        await pool.query(
+          `DELETE FROM itinerary_day_settings
+           WHERE itinerary_id = $1
+             AND (date < $2::date OR date > $3::date)`,
+          [args.id, dateStart, dateEnd],
+        );
+
+        return toItinerary(itinerary);
       },
       deleteItinerary: async (
         _parent,

@@ -27,6 +27,26 @@
   font-weight: 400;
 }
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.edit,
+.edit:hover {
+  padding: 8px 0;
+  border: 1px solid transparent;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.edit:hover {
+  color: var(--primary-hover);
+}
+
 .nav {
   display: flex;
   align-items: center;

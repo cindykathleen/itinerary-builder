@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import ItineraryEdit from "./ItineraryEdit";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
 import ItineraryTimeline from "./ItineraryTimeline";
 import ItineraryViewToggle from "./ItineraryViewToggle";
@@ -10,6 +11,7 @@ const itineraryQuery = /* GraphQL */ `
     itinerary(id: $id) {
       id
       name
+      destination
       dateStart
       dateEnd
       dayStart
@@ -29,6 +31,7 @@ type ItineraryQuery = {
   itinerary: {
     id: string;
     name: string;
+    destination: string;
     dateStart: string;
     dateEnd: string;
     dayStart: string;
@@ -74,7 +77,21 @@ export default async function ItineraryPage({
     <main className={`page ${styles.page}`}>
       <header className={styles.header}>
         <h1 className={styles.title}>{itinerary.name}</h1>
-        <ItineraryViewToggle itineraryId={itinerary.id} view={view} />
+        <div className={styles.controls}>
+          <ItineraryEdit
+            itinerary={{
+              id: itinerary.id,
+              name: itinerary.name,
+              destination: itinerary.destination,
+              dateStart: itinerary.dateStart,
+              dateEnd: itinerary.dateEnd,
+              dayStart: itinerary.dayStart,
+              dayEnd: itinerary.dayEnd,
+              timeInterval: itinerary.timeInterval,
+            }}
+          />
+          <ItineraryViewToggle itineraryId={itinerary.id} view={view} />
+        </div>
       </header>
 
       {view === "activities" ? (

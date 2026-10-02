@@ -56,12 +56,17 @@
   height: 36px;
   padding: 0 12px;
   border-bottom: 1px solid var(--surface);
+  border-right: 1px solid var(--surface);
 }
 
 .cell {
   height: 36px;
   border-bottom: 1px solid var(--surface);
   border-left: 1px solid var(--surface);
+}
+
+.time + .cell {
+  border-left: none;
 }
 
 .day .headerInput {

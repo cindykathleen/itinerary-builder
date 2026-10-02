@@ -136,6 +136,57 @@ export async function saveItineraryDayHeading(
   revalidatePath(`/itineraries/${itineraryId}`);
 }
 
+const updateItineraryMutation = /* GraphQL */ `
+  mutation UpdateItinerary(
+    $id: ID!
+    $name: String!
+    $destination: String!
+    $dateStart: String!
+    $dateEnd: String!
+    $dayStart: String!
+    $dayEnd: String!
+    $timeInterval: Int!
+  ) {
+    updateItinerary(
+      id: $id
+      name: $name
+      destination: $destination
+      dateStart: $dateStart
+      dateEnd: $dateEnd
+      dayStart: $dayStart
+      dayEnd: $dayEnd
+      timeInterval: $timeInterval
+    ) {
+      id
+      name
+    }
+  }
+`;
+
+export async function updateItinerary(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const destination = String(formData.get("destination") ?? "").trim();
+  const dateStart = String(formData.get("dateStart") ?? "");
+  const dateEnd = String(formData.get("dateEnd") ?? "");
+  const dayStart = String(formData.get("dayStart") ?? "");
+  const dayEnd = String(formData.get("dayEnd") ?? "");
+  const timeInterval = Number(formData.get("timeInterval"));
+
+  await executeGraphQL(updateItineraryMutation, {
+    id,
+    name,
+    destination,
+    dateStart,
+    dateEnd,
+    dayStart,
+    dayEnd,
+    timeInterval,
+  });
+  revalidatePath("/itineraries");
+  revalidatePath(`/itineraries/${id}`);
+}
+
 export async function createItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const destination = String(formData.get("destination") ?? "").trim();
