@@ -160,6 +160,7 @@ input[type="password"] {
 }
 
 dialog {
+  margin: auto;
   padding: 16px;
   border: 1px solid var(--surface);
   border-radius: 8px;

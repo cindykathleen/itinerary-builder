@@ -102,7 +102,7 @@ export const schema = createSchema({
           `SELECT ${itineraryColumns}
            FROM itineraries
            WHERE owner_id = $1 AND status = $2
-           ORDER BY date_start DESC, created_at DESC`,
+           ORDER BY updated_at DESC, created_at DESC`,
           [context.userId, args.status],
         );
 
@@ -133,12 +133,6 @@ export const schema = createSchema({
 
         if (!name) {
           throw new GraphQLError("Itinerary name is required.", {
-            extensions: { code: "BAD_USER_INPUT" },
-          });
-        }
-
-        if (!destination) {
-          throw new GraphQLError("Itinerary destination is required.", {
             extensions: { code: "BAD_USER_INPUT" },
           });
         }

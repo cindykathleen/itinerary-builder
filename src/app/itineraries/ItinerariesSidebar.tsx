@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ItineraryCreate from "./ItineraryCreate";
+import styles from "./ItinerariesSidebar.module.css";
 
 export type ItineraryListStatus = "active" | "archived" | "trashed";
 
@@ -15,14 +16,15 @@ export default function ItinerariesSidebar({
   currentStatus: ItineraryListStatus;
 }) {
   return (
-    <aside>
-      <ItineraryCreate />
-      <nav>
-        <ul>
+    <aside className={styles.sidebar}>
+      <ItineraryCreate variant="secondary" idPrefix="sidebar-create" />
+      <nav className={styles.nav}>
+        <ul className={styles.list}>
           {filters.map((filter) => (
             <li key={filter.status}>
               <Link
                 href={filter.href}
+                className={styles.link}
                 aria-current={currentStatus === filter.status ? "page" : undefined}
               >
                 {filter.label}

@@ -1,6 +1,8 @@
 import { executeGraphQL } from "@/lib/graphql/execute";
 import ItinerariesGrid from "./ItinerariesGrid";
 import ItinerariesSidebar, { type ItineraryListStatus } from "./ItinerariesSidebar";
+import ItineraryCreate from "./ItineraryCreate";
+import styles from "./page.module.css";
 
 const itinerariesQuery = /* GraphQL */ `
   query MyItineraries($status: ItineraryStatus!) {
@@ -18,12 +20,6 @@ type ItinerariesQuery = {
     name: string;
     photoUrl: string | null;
   }[];
-};
-
-const headings: Record<ItineraryListStatus, string> = {
-  active: "My itineraries",
-  archived: "Archived",
-  trashed: "Trash",
 };
 
 function parseStatus(
@@ -49,11 +45,15 @@ export default async function ItinerariesPage({
   );
 
   return (
-    <main>
+    <main className={`page ${styles.page}`}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>My Itineraries</h1>
+        <ItineraryCreate variant="primary" idPrefix="header-create" />
+      </header>
+
       <ItinerariesSidebar currentStatus={status} />
 
-      <section>
-        <h1>{headings[status]}</h1>
+      <section className={styles.board}>
         <ItinerariesGrid itineraries={itineraries} status={status} />
       </section>
     </main>

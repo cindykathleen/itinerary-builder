@@ -1,0 +1,65 @@
+.menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  list-style: none;
+}
+
+.trigger:hover,
+.trigger:active,
+.trigger:focus {
+  background-color: transparent;
+}
+
+.trigger::-webkit-details-marker {
+  display: none;
+}
+
+.trigger::marker {
+  content: "";
+}
+
+.menu[open] {
+  z-index: 2;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 2;
+  min-width: 180px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.action {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  text-align: left;
+}
+
+.action:hover {
+  border: none;
+  background-color: var(--background);
+}

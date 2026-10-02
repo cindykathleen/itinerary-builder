@@ -1,0 +1,108 @@
+.dialog {
+  --dialog-width: 560px;
+  width: min(var(--dialog-width), calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--surface);
+  border-radius: 16px;
+  background-color: var(--foreground);
+  color: var(--text-primary);
+  font-family: var(--font-dm-sans);
+}
+
+.dialog:modal {
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 24px;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.close {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.close:hover {
+  border: none;
+  color: var(--text-primary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+  border: none;
+}
+
+.fieldset legend {
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+}
+
+.dialog :is(input[type="text"], input[type="date"]) {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.hint {
+  color: #e53e3e;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: auto;
+}

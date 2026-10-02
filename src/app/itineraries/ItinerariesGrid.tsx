@@ -1,5 +1,6 @@
 import type { ItineraryListStatus } from "./ItinerariesSidebar";
 import ItineraryCard, { type ItineraryCardData } from "./ItineraryCard";
+import styles from "./ItinerariesGrid.module.css";
 
 const emptyMessages: Record<ItineraryListStatus, string> = {
   active: "Your itineraries will appear here.",
@@ -15,11 +16,11 @@ export default function ItinerariesGrid({
   status: ItineraryListStatus;
 }) {
   if (itineraries.length === 0) {
-    return <p>{emptyMessages[status]}</p>;
+    return <p className={styles.empty}>{emptyMessages[status]}</p>;
   }
 
   return (
-    <ul>
+    <ul className={styles.grid}>
       {itineraries.map((itinerary) => (
         <li key={itinerary.id}>
           <ItineraryCard itinerary={itinerary} status={status} />
