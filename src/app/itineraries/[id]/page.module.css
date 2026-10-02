@@ -1,12 +1,16 @@
 .page {
-  flex: 1;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  align-self: stretch;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   column-gap: 20px;
   row-gap: 24px;
   padding: 32px 40px 40px;
+  overflow: hidden;
 }
 
 .header {
@@ -56,8 +60,12 @@
 
 @media (max-width: 800px) {
   .page {
+    height: auto;
+    min-height: 100vh;
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     padding: 16px;
+    overflow: visible;
   }
 
   .header {

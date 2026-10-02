@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
+import ItineraryTimeline from "./ItineraryTimeline";
 import ItineraryViewToggle from "./ItineraryViewToggle";
 import styles from "./page.module.css";
 
@@ -9,7 +10,17 @@ const itineraryQuery = /* GraphQL */ `
     itinerary(id: $id) {
       id
       name
+      dateStart
+      dateEnd
+      dayStart
+      dayEnd
+      timeInterval
+      timeFormat
       scheduleConfigured
+      daySettings {
+        date
+        heading
+      }
     }
   }
 `;
@@ -18,7 +29,17 @@ type ItineraryQuery = {
   itinerary: {
     id: string;
     name: string;
+    dateStart: string;
+    dateEnd: string;
+    dayStart: string;
+    dayEnd: string;
+    timeInterval: number;
+    timeFormat: string;
     scheduleConfigured: boolean;
+    daySettings: {
+      date: string;
+      heading: string | null;
+    }[];
   } | null;
 };
 
@@ -62,7 +83,18 @@ export default async function ItineraryPage({
         <section className={styles.side} aria-label="Map" />
       )}
 
-      {itinerary.scheduleConfigured ? null : (
+      {itinerary.scheduleConfigured ? (
+        <ItineraryTimeline
+          itineraryId={itinerary.id}
+          dateStart={itinerary.dateStart}
+          dateEnd={itinerary.dateEnd}
+          dayStart={itinerary.dayStart}
+          dayEnd={itinerary.dayEnd}
+          timeInterval={itinerary.timeInterval}
+          timeFormat={itinerary.timeFormat}
+          daySettings={itinerary.daySettings}
+        />
+      ) : (
         <ItineraryScheduleSetup itineraryId={itinerary.id} />
       )}
     </main>

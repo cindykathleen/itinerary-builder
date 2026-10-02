@@ -9,6 +9,10 @@ type ItineraryRow = {
   destination: string;
   date_start: string;
   date_end: string;
+  day_start: string;
+  day_end: string;
+  time_interval: number;
+  time_format: "12h" | "24h";
   status: "active" | "archived" | "trashed";
   photo_url: string | null;
   schedule_configured: boolean;
@@ -21,6 +25,10 @@ function toItinerary(row: ItineraryRow) {
     destination: row.destination,
     dateStart: row.date_start,
     dateEnd: row.date_end,
+    dayStart: row.day_start.slice(0, 5),
+    dayEnd: row.day_end.slice(0, 5),
+    timeInterval: Number(row.time_interval),
+    timeFormat: row.time_format,
     status: row.status,
     photoUrl: row.photo_url,
     scheduleConfigured: row.schedule_configured,
@@ -33,6 +41,10 @@ const itineraryColumns = `
   destination,
   date_start::text AS date_start,
   date_end::text AS date_end,
+  day_start::text AS day_start,
+  day_end::text AS day_end,
+  time_interval,
+  time_format,
   status,
   photo_url,
   schedule_configured
@@ -79,9 +91,19 @@ export const schema = createSchema({
       destination: String!
       dateStart: String!
       dateEnd: String!
+      dayStart: String!
+      dayEnd: String!
+      timeInterval: Int!
+      timeFormat: String!
       status: ItineraryStatus!
       photoUrl: String
       scheduleConfigured: Boolean!
+      daySettings: [ItineraryDay!]!
+    }
+
+    type ItineraryDay {
+      date: String!
+      heading: String
     }
 
     type Query {
@@ -104,10 +126,24 @@ export const schema = createSchema({
         dayEnd: String!
         timeInterval: Int!
       ): Itinerary!
+      saveItineraryDayHeading(id: ID!, date: String!, heading: String!): Boolean!
       deleteItinerary(id: ID!): Boolean!
     }
   `,
   resolvers: {
+    Itinerary: {
+      daySettings: async (parent: { id: string }) => {
+        const result = await pool.query<{ date: string; heading: string | null }>(
+          `SELECT date::text AS date, heading
+           FROM itinerary_day_settings
+           WHERE itinerary_id = $1
+           ORDER BY date`,
+          [parent.id],
+        );
+
+        return result.rows;
+      },
+    },
     Query: {
       itineraries: async (
         _parent,
@@ -345,6 +381,73 @@ export const schema = createSchema({
         }
 
         return toItinerary(itinerary);
+      },
+      saveItineraryDayHeading: async (
+        _parent,
+        args: { id: string; date: string; heading: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to update itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const date = parseIsoDate(args.date);
+        const heading = args.heading.trim();
+
+        if (!date) {
+          throw new GraphQLError("A valid date is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (heading.length > 255) {
+          throw new GraphQLError("Header must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const owned = await pool.query<{ date_start: string; date_end: string }>(
+          `SELECT date_start::text AS date_start, date_end::text AS date_end
+           FROM itineraries
+           WHERE id = $1 AND owner_id = $2`,
+          [args.id, context.userId],
+        );
+
+        const itinerary = owned.rows[0];
+
+        if (!itinerary) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        if (date < itinerary.date_start || date > itinerary.date_end) {
+          throw new GraphQLError("Header date must be within the itinerary.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!heading) {
+          await pool.query(
+            `DELETE FROM itinerary_day_settings
+             WHERE itinerary_id = $1 AND date = $2::date`,
+            [args.id, date],
+          );
+
+          return true;
+        }
+
+        await pool.query(
+          `INSERT INTO itinerary_day_settings (itinerary_id, date, heading)
+           VALUES ($1, $2::date, $3)
+           ON CONFLICT (itinerary_id, date)
+           DO UPDATE SET heading = EXCLUDED.heading`,
+          [args.id, date, heading],
+        );
+
+        return true;
       },
       deleteItinerary: async (
         _parent,

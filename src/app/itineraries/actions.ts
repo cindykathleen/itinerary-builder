@@ -117,6 +117,25 @@ export async function saveItinerarySchedule(formData: FormData) {
   revalidatePath(`/itineraries/${id}`);
 }
 
+const saveItineraryDayHeadingMutation = /* GraphQL */ `
+  mutation SaveItineraryDayHeading($id: ID!, $date: String!, $heading: String!) {
+    saveItineraryDayHeading(id: $id, date: $date, heading: $heading)
+  }
+`;
+
+export async function saveItineraryDayHeading(
+  itineraryId: string,
+  date: string,
+  heading: string,
+) {
+  await executeGraphQL(saveItineraryDayHeadingMutation, {
+    id: itineraryId,
+    date,
+    heading,
+  });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
 export async function createItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const destination = String(formData.get("destination") ?? "").trim();
