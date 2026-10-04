@@ -52,6 +52,7 @@ const itineraryColumns = `
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_CATEGORY_COLOR = "#E0E6ED"; // --surface
 
 function parseIsoDate(value: string) {
   if (!DATE_PATTERN.test(value)) {
@@ -77,6 +78,20 @@ function parseTime(value: string) {
   return time;
 }
 
+function parseHexColor(value: string) {
+  const digits = value.trim().replace(/^#/, "");
+
+  if (digits === "") {
+    return DEFAULT_CATEGORY_COLOR;
+  }
+
+  if (!/^[0-9A-Fa-f]{6}$/.test(digits)) {
+    return null;
+  }
+
+  return `#${digits}`;
+}
+
 export const schema = createSchema({
   typeDefs: /* GraphQL */ `
     enum ItineraryStatus {
@@ -99,11 +114,26 @@ export const schema = createSchema({
       photoUrl: String
       scheduleConfigured: Boolean!
       daySettings: [ItineraryDay!]!
+      categories: [Category!]!
+      activities: [Activity!]!
     }
 
     type ItineraryDay {
       date: String!
       heading: String
+    }
+
+    type Category {
+      id: ID!
+      name: String!
+      color: String!
+    }
+
+    type Activity {
+      id: ID!
+      name: String!
+      note: String
+      categoryId: ID
     }
 
     type Query {
@@ -138,6 +168,17 @@ export const schema = createSchema({
         timeInterval: Int!
       ): Itinerary!
       deleteItinerary(id: ID!): Boolean!
+      createCategory(itineraryId: ID!, name: String!, color: String!): Category!
+      updateCategory(id: ID!, name: String!, color: String!): Category!
+      deleteCategory(id: ID!): Boolean!
+      createActivity(
+        itineraryId: ID!
+        name: String!
+        note: String!
+        categoryId: ID
+      ): Activity!
+      updateActivity(id: ID!, name: String!, note: String!, categoryId: ID): Activity!
+      deleteActivity(id: ID!): Boolean!
     }
   `,
   resolvers: {
@@ -152,6 +193,38 @@ export const schema = createSchema({
         );
 
         return result.rows;
+      },
+      categories: async (parent: { id: string }) => {
+        const result = await pool.query<{ id: string; name: string; color: string }>(
+          `SELECT id, name, color
+           FROM categories
+           WHERE itinerary_id = $1
+           ORDER BY created_at, name`,
+          [parent.id],
+        );
+
+        return result.rows;
+      },
+      activities: async (parent: { id: string }) => {
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          note: string | null;
+          category_id: string | null;
+        }>(
+          `SELECT id, name, note, category_id
+           FROM activities
+           WHERE itinerary_id = $1
+           ORDER BY created_at, name`,
+          [parent.id],
+        );
+
+        return result.rows.map((activity) => ({
+          id: activity.id,
+          name: activity.name,
+          note: activity.note,
+          categoryId: activity.category_id,
+        }));
       },
     },
     Query: {
@@ -586,6 +659,330 @@ export const schema = createSchema({
 
         if (!result.rows[0]) {
           throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return true;
+      },
+      createCategory: async (
+        _parent,
+        args: { itineraryId: string; name: string; color: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to create categories.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const color = parseHexColor(args.color);
+
+        if (!name) {
+          throw new GraphQLError("Category name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Category name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!color) {
+          throw new GraphQLError("Color must be a 6-digit hex code.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const owned = await pool.query(
+          `SELECT id
+           FROM itineraries
+           WHERE id = $1 AND owner_id = $2`,
+          [args.itineraryId, context.userId],
+        );
+
+        if (!owned.rows[0]) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        const result = await pool.query<{ id: string; name: string; color: string }>(
+          `INSERT INTO categories (itinerary_id, name, color)
+           VALUES ($1, $2, $3)
+           RETURNING id, name, color`,
+          [args.itineraryId, name, color],
+        );
+
+        return result.rows[0];
+      },
+      updateCategory: async (
+        _parent,
+        args: { id: string; name: string; color: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to edit categories.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const color = parseHexColor(args.color);
+
+        if (!name) {
+          throw new GraphQLError("Category name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Category name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!color) {
+          throw new GraphQLError("Color must be a 6-digit hex code.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const result = await pool.query<{ id: string; name: string; color: string }>(
+          `UPDATE categories
+           SET name = $1, color = $2
+           WHERE id = $3
+             AND itinerary_id IN (
+               SELECT id FROM itineraries WHERE owner_id = $4
+             )
+           RETURNING id, name, color`,
+          [name, color, args.id, context.userId],
+        );
+
+        const category = result.rows[0];
+
+        if (!category) {
+          throw new GraphQLError("Category not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return category;
+      },
+      deleteCategory: async (
+        _parent,
+        args: { id: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to delete categories.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const result = await pool.query(
+          `DELETE FROM categories
+           WHERE id = $1
+             AND itinerary_id IN (
+               SELECT id FROM itineraries WHERE owner_id = $2
+             )
+           RETURNING id`,
+          [args.id, context.userId],
+        );
+
+        if (!result.rows[0]) {
+          throw new GraphQLError("Category not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return true;
+      },
+      createActivity: async (
+        _parent,
+        args: { itineraryId: string; name: string; note: string; categoryId?: string | null },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to create activities.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const note = args.note.trim();
+        const categoryId = args.categoryId?.trim() || null;
+
+        if (!name) {
+          throw new GraphQLError("Activity name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Activity name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const owned = await pool.query(
+          `SELECT id
+           FROM itineraries
+           WHERE id = $1 AND owner_id = $2`,
+          [args.itineraryId, context.userId],
+        );
+
+        if (!owned.rows[0]) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        if (categoryId) {
+          const category = await pool.query(
+            `SELECT id
+             FROM categories
+             WHERE id = $1 AND itinerary_id = $2`,
+            [categoryId, args.itineraryId],
+          );
+
+          if (!category.rows[0]) {
+            throw new GraphQLError("Category not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+        }
+
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          note: string | null;
+          category_id: string | null;
+        }>(
+          `INSERT INTO activities (itinerary_id, category_id, name, note)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, note, category_id`,
+          [args.itineraryId, categoryId, name, note || null],
+        );
+
+        const activity = result.rows[0];
+
+        return {
+          id: activity.id,
+          name: activity.name,
+          note: activity.note,
+          categoryId: activity.category_id,
+        };
+      },
+      updateActivity: async (
+        _parent,
+        args: { id: string; name: string; note: string; categoryId?: string | null },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to edit activities.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+        const note = args.note.trim();
+        const categoryId = args.categoryId?.trim() || null;
+
+        if (!name) {
+          throw new GraphQLError("Activity name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Activity name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const existing = await pool.query<{ itinerary_id: string }>(
+          `SELECT activities.itinerary_id
+           FROM activities
+           JOIN itineraries ON itineraries.id = activities.itinerary_id
+           WHERE activities.id = $1 AND itineraries.owner_id = $2`,
+          [args.id, context.userId],
+        );
+
+        const activityRow = existing.rows[0];
+
+        if (!activityRow) {
+          throw new GraphQLError("Activity not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        if (categoryId) {
+          const category = await pool.query(
+            `SELECT id
+             FROM categories
+             WHERE id = $1 AND itinerary_id = $2`,
+            [categoryId, activityRow.itinerary_id],
+          );
+
+          if (!category.rows[0]) {
+            throw new GraphQLError("Category not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+        }
+
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          note: string | null;
+          category_id: string | null;
+        }>(
+          `UPDATE activities
+           SET name = $1,
+               note = $2,
+               category_id = $3,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4 AND itinerary_id = $5
+           RETURNING id, name, note, category_id`,
+          [name, note || null, categoryId, args.id, activityRow.itinerary_id],
+        );
+
+        const activity = result.rows[0];
+
+        return {
+          id: activity.id,
+          name: activity.name,
+          note: activity.note,
+          categoryId: activity.category_id,
+        };
+      },
+      deleteActivity: async (
+        _parent,
+        args: { id: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to delete activities.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const result = await pool.query(
+          `DELETE FROM activities
+           WHERE id = $1
+             AND itinerary_id IN (
+               SELECT id FROM itineraries WHERE owner_id = $2
+             )
+           RETURNING id`,
+          [args.id, context.userId],
+        );
+
+        if (!result.rows[0]) {
+          throw new GraphQLError("Activity not found.", {
             extensions: { code: "NOT_FOUND" },
           });
         }

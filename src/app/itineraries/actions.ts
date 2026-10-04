@@ -187,6 +187,136 @@ export async function updateItinerary(formData: FormData) {
   revalidatePath(`/itineraries/${id}`);
 }
 
+const createCategoryMutation = /* GraphQL */ `
+  mutation CreateCategory($itineraryId: ID!, $name: String!, $color: String!) {
+    createCategory(itineraryId: $itineraryId, name: $name, color: $color) {
+      id
+      name
+      color
+    }
+  }
+`;
+
+export async function createCategory(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+
+  await executeGraphQL(createCategoryMutation, { itineraryId, name, color });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const updateCategoryMutation = /* GraphQL */ `
+  mutation UpdateCategory($id: ID!, $name: String!, $color: String!) {
+    updateCategory(id: $id, name: $name, color: $color) {
+      id
+      name
+      color
+    }
+  }
+`;
+
+export async function updateCategory(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+
+  await executeGraphQL(updateCategoryMutation, { id, name, color });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const deleteCategoryMutation = /* GraphQL */ `
+  mutation DeleteCategory($id: ID!) {
+    deleteCategory(id: $id)
+  }
+`;
+
+export async function deleteCategory(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+
+  await executeGraphQL(deleteCategoryMutation, { id });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const createActivityMutation = /* GraphQL */ `
+  mutation CreateActivity(
+    $itineraryId: ID!
+    $name: String!
+    $note: String!
+    $categoryId: ID
+  ) {
+    createActivity(
+      itineraryId: $itineraryId
+      name: $name
+      note: $note
+      categoryId: $categoryId
+    ) {
+      id
+      name
+      note
+      categoryId
+    }
+  }
+`;
+
+export async function createActivity(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const categoryId = String(formData.get("categoryId") ?? "").trim();
+
+  await executeGraphQL(createActivityMutation, {
+    itineraryId,
+    name,
+    note,
+    categoryId: categoryId || null,
+  });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const updateActivityMutation = /* GraphQL */ `
+  mutation UpdateActivity($id: ID!, $name: String!, $note: String!, $categoryId: ID) {
+    updateActivity(id: $id, name: $name, note: $note, categoryId: $categoryId) {
+      id
+      name
+      note
+      categoryId
+    }
+  }
+`;
+
+export async function updateActivity(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const categoryId = String(formData.get("categoryId") ?? "").trim();
+
+  await executeGraphQL(updateActivityMutation, {
+    id,
+    name,
+    note,
+    categoryId: categoryId || null,
+  });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const deleteActivityMutation = /* GraphQL */ `
+  mutation DeleteActivity($id: ID!) {
+    deleteActivity(id: $id)
+  }
+`;
+
+export async function deleteActivity(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+
+  await executeGraphQL(deleteActivityMutation, { id });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
 export async function createItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const destination = String(formData.get("destination") ?? "").trim();

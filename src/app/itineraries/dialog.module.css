@@ -17,6 +17,11 @@
   margin: auto;
 }
 
+.colorDialog,
+.menuDialog {
+  overflow: visible;
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -104,7 +109,7 @@
   margin: 0;
 }
 
-.dialog :is(input[type="text"], input[type="date"], input[type="time"]) {
+.dialog :is(input[type="text"], input[type="date"], input[type="time"], textarea, select) {
   width: 100%;
   padding: 8px 16px;
   border: none;
@@ -113,6 +118,61 @@
   color: var(--text-primary);
   font-family: inherit;
   font-size: 16px;
+}
+
+.dialog textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.colorControl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.colorField {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding-left: 16px;
+  border-radius: 8px;
+  background-color: var(--background);
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.dialog .colorField input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  padding-left: 2px;
+  background-color: transparent;
+}
+
+.colorPreview,
+.colorPreview:hover {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.colorPicker {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 16px);
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hint {
@@ -124,4 +184,90 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: auto;
+}
+
+.categorySelect {
+  position: relative;
+}
+
+.categorySelectTrigger,
+.categorySelectTrigger:hover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.categorySelectLabel {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categorySelectChevron {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-right: 2px;
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.categorySelectMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 3;
+  max-height: 240px;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.categorySelectOption,
+.categorySelectOption:hover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.categorySelectOption:hover,
+.categorySelectOption[aria-selected="true"] {
+  background-color: var(--background);
+}
+
+.categorySwatch {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid rgba(26, 32, 44, 0.12);
+  border-radius: 50%;
 }
