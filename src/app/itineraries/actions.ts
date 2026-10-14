@@ -246,12 +246,20 @@ const createActivityMutation = /* GraphQL */ `
     $name: String!
     $note: String!
     $categoryId: ID
+    $inSidebar: Boolean
+    $date: String
+    $startTime: String
+    $endTime: String
   ) {
     createActivity(
       itineraryId: $itineraryId
       name: $name
       note: $note
       categoryId: $categoryId
+      inSidebar: $inSidebar
+      date: $date
+      startTime: $startTime
+      endTime: $endTime
     ) {
       id
       name
@@ -266,12 +274,20 @@ export async function createActivity(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
+  const date = String(formData.get("date") ?? "").trim();
+  const startTime = String(formData.get("startTime") ?? "").trim();
+  const endTime = String(formData.get("endTime") ?? "").trim();
+  const inSidebar = formData.get("inSidebar") !== "false";
 
   await executeGraphQL(createActivityMutation, {
     itineraryId,
     name,
     note,
     categoryId: categoryId || null,
+    inSidebar,
+    date: date || null,
+    startTime: startTime || null,
+    endTime: endTime || null,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }
@@ -308,6 +324,46 @@ const deleteActivityMutation = /* GraphQL */ `
     deleteActivity(id: $id)
   }
 `;
+
+const scheduleActivityMutation = /* GraphQL */ `
+  mutation ScheduleActivity(
+    $id: ID!
+    $itineraryId: ID!
+    $date: String!
+    $startTime: String!
+    $endTime: String!
+  ) {
+    scheduleActivity(
+      id: $id
+      itineraryId: $itineraryId
+      date: $date
+      startTime: $startTime
+      endTime: $endTime
+    )
+  }
+`;
+
+export async function scheduleActivity(input: {
+  itineraryId: string;
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}) {
+  await executeGraphQL(scheduleActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
+
+const unscheduleActivityMutation = /* GraphQL */ `
+  mutation UnscheduleActivity($id: ID!, $itineraryId: ID!) {
+    unscheduleActivity(id: $id, itineraryId: $itineraryId)
+  }
+`;
+
+export async function unscheduleActivity(input: { itineraryId: string; id: string }) {
+  await executeGraphQL(unscheduleActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
 
 export async function deleteActivity(formData: FormData) {
   const itineraryId = String(formData.get("itineraryId") ?? "");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
@@ -19,16 +19,31 @@ function CreateButton({ disabled }: { disabled: boolean }) {
   );
 }
 
+export type ActivitySlot = {
+  date: string;
+  startTime: string;
+  endTime: string;
+  label: string;
+};
+
 export default function ActivityCreate({
   itineraryId,
   categories,
   dialogRef,
+  slot = null,
+  onDismiss,
 }: {
   itineraryId: string;
   categories: CategoryOption[];
   dialogRef: RefObject<HTMLDialogElement | null>;
+  slot?: ActivitySlot | null;
+  onDismiss?: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const titleId = useId();
+  const nameId = useId();
+  const noteId = useId();
+  const categoryFieldId = useId();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -43,6 +58,7 @@ export default function ActivityCreate({
     setName("");
     setNote("");
     setCategoryId("");
+    onDismiss?.();
   };
 
   const guardSubmit = (event: SubmitEvent<HTMLFormElement>) => {
@@ -60,7 +76,7 @@ export default function ActivityCreate({
     <dialog
       ref={dialogRef}
       className={`${dialogStyles.dialog} ${dialogStyles.menuDialog}`}
-      aria-labelledby="activity-create-title"
+      aria-labelledby={titleId}
       onClose={resetDialog}
       onKeyDown={closeDialogOnEscape}
     >
@@ -73,7 +89,7 @@ export default function ActivityCreate({
         <input type="hidden" name="itineraryId" value={itineraryId} />
 
         <div className={dialogStyles.header}>
-          <h2 id="activity-create-title" className={dialogStyles.title}>
+          <h2 id={titleId} className={dialogStyles.title}>
             New activity
           </h2>
           <button
@@ -87,12 +103,21 @@ export default function ActivityCreate({
         </div>
 
         <div className={dialogStyles.body}>
+          {slot ? (
+            <>
+              <p className={dialogStyles.when}>{slot.label}</p>
+              <input type="hidden" name="date" value={slot.date} />
+              <input type="hidden" name="startTime" value={slot.startTime} />
+              <input type="hidden" name="endTime" value={slot.endTime} />
+            </>
+          ) : null}
+
           <div className={dialogStyles.field}>
-            <label htmlFor="activity-name">
+            <label htmlFor={nameId}>
               Name <span className="required">*</span>
             </label>
             <input
-              id="activity-name"
+              id={nameId}
               name="name"
               type="text"
               value={name}
@@ -103,9 +128,9 @@ export default function ActivityCreate({
           </div>
 
           <div className={dialogStyles.field}>
-            <label htmlFor="activity-note">Note</label>
+            <label htmlFor={noteId}>Note</label>
             <textarea
-              id="activity-note"
+              id={noteId}
               name="note"
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -113,9 +138,9 @@ export default function ActivityCreate({
           </div>
 
           <div className={dialogStyles.field}>
-            <label htmlFor="activity-category">Category</label>
+            <label htmlFor={categoryFieldId}>Category</label>
             <CategorySelect
-              id="activity-category"
+              id={categoryFieldId}
               categories={categories}
               value={categoryId}
               onChange={setCategoryId}

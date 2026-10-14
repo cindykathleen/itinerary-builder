@@ -179,6 +179,10 @@
   color: #e53e3e;
 }
 
+.when {
+  color: var(--text-secondary);
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;

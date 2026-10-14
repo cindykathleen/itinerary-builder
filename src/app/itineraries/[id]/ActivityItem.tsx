@@ -25,6 +25,7 @@ export default function ActivityItem({
   name: activityName,
   note: activityNote,
   categoryId: activityCategoryId,
+  scheduled,
   categories,
 }: {
   itineraryId: string;
@@ -32,6 +33,7 @@ export default function ActivityItem({
   name: string;
   note: string | null;
   categoryId: string | null;
+  scheduled: boolean;
   categories: CategoryOption[];
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -109,8 +111,15 @@ export default function ActivityItem({
   };
 
   return (
-    <li className={styles.activity}>
-      <div className={styles.activityBody}>
+    <li className={scheduled ? `${styles.activity} ${styles.activityScheduled}` : styles.activity}>
+      <div
+        className={styles.activityBody}
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData("text/plain", id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+      >
         <h4>{activityName}</h4>
         {activityNote ? <p>{activityNote}</p> : null}
       </div>

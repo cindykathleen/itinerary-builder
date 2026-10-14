@@ -37,7 +37,7 @@ function contrastRatio(first: number, second: number) {
 const textPrimaryLuminance = relativeLuminance(TEXT_PRIMARY);
 const whiteLuminance = relativeLuminance(WHITE);
 
-function categoryTextColor(background: string) {
+export function categoryTextColor(background: string) {
   if (!/^#[0-9A-Fa-f]{6}$/.test(background)) {
     return undefined;
   }
@@ -75,7 +75,7 @@ export default function CategoryItem({
   id: string;
   name: string;
   color: string;
-  activities: { id: string; name: string; note: string | null }[];
+  activities: { id: string; name: string; note: string | null; scheduled: boolean }[];
   categories: CategoryOption[];
   readOnly?: boolean;
 }) {
@@ -240,6 +240,7 @@ export default function CategoryItem({
               id={activity.id}
               name={activity.name}
               note={activity.note}
+              scheduled={activity.scheduled}
               categoryId={readOnly ? null : id}
               categories={categories}
             />

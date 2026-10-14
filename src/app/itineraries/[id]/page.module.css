@@ -135,6 +135,11 @@
 .activityBody {
   min-width: 0;
   flex: 1;
+  cursor: grab;
+}
+
+.activityBody:active {
+  cursor: grabbing;
 }
 
 .activity h4 {
@@ -226,6 +231,10 @@
 .activity p {
   color: var(--text-secondary);
   white-space: normal;
+}
+
+.activityScheduled .activityBody {
+  opacity: 0.4;
 }
 
 .category h3 {
