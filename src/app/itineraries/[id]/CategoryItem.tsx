@@ -8,6 +8,7 @@ import ActivityItem from "./ActivityItem";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
 import type { CategoryOption } from "./CategorySelect";
+import type { StopOption } from "./StopSelect";
 import styles from "./page.module.css";
 
 const DEFAULT_COLOR = "E0E6ED";
@@ -69,14 +70,22 @@ export default function CategoryItem({
   color: categoryColor,
   activities,
   categories,
+  stops,
   readOnly = false,
 }: {
   itineraryId: string;
   id: string;
   name: string;
   color: string;
-  activities: { id: string; name: string; note: string | null; scheduled: boolean }[];
+  activities: {
+    id: string;
+    name: string;
+    note: string | null;
+    scheduled: boolean;
+    stopId: string | null;
+  }[];
   categories: CategoryOption[];
+  stops: StopOption[];
   readOnly?: boolean;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -242,7 +251,9 @@ export default function CategoryItem({
               note={activity.note}
               scheduled={activity.scheduled}
               categoryId={readOnly ? null : id}
+              stopId={activity.stopId}
               categories={categories}
+              stops={stops}
             />
           ))}
         </ul>

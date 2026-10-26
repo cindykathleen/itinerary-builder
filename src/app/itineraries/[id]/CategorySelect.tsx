@@ -7,7 +7,15 @@ export type CategoryOption = {
   id: string;
   name: string;
   color: string;
+  logistics: boolean;
+  stopId: string | null;
 };
+
+export function categoriesForStop(categories: CategoryOption[], stopId: string) {
+  return categories.filter((category) =>
+    stopId === "" ? category.stopId === null : category.stopId === stopId,
+  );
+}
 
 const NONE_COLOR = "var(--surface)";
 

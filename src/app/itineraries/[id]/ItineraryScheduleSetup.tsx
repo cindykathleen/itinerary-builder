@@ -31,8 +31,7 @@ export default function ItineraryScheduleSetup({
   const [dayEnd, setDayEnd] = useState("");
   const [timeInterval, setTimeInterval] = useState("");
   const timeRangeError = isEndTimeBeforeStart(dayStart, dayEnd);
-  const fieldsFilled =
-    dayStart !== "" && dayEnd !== "" && timeInterval !== "";
+  const fieldsFilled = dayStart !== "" && dayEnd !== "" && timeInterval !== "";
   const canSubmit = fieldsFilled && !timeRangeError;
 
   useEffect(() => {

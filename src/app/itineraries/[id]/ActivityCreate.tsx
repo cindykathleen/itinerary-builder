@@ -1,13 +1,14 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { createActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
-import CategorySelect, { type CategoryOption } from "./CategorySelect";
+import CategorySelect, { categoriesForStop, type CategoryOption } from "./CategorySelect";
+import StopSelect, { type StopOption } from "./StopSelect";
 
 function CreateButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
@@ -29,12 +30,16 @@ export type ActivitySlot = {
 export default function ActivityCreate({
   itineraryId,
   categories,
+  stops = [],
+  defaultStopId = null,
   dialogRef,
   slot = null,
   onDismiss,
 }: {
   itineraryId: string;
   categories: CategoryOption[];
+  stops?: StopOption[];
+  defaultStopId?: string | null;
   dialogRef: RefObject<HTMLDialogElement | null>;
   slot?: ActivitySlot | null;
   onDismiss?: () => void;
@@ -44,10 +49,32 @@ export default function ActivityCreate({
   const nameId = useId();
   const noteId = useId();
   const categoryFieldId = useId();
+  const stopFieldId = useId();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [stopId, setStopId] = useState(defaultStopId ?? "");
+  const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
+
+  const chooseStop = (nextStopId: string) => {
+    setStopId(nextStopId);
+    setCategoryId((current) =>
+      categoriesForStop(categories, nextStopId).some((category) => category.id === current)
+        ? current
+        : "",
+    );
+  };
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog || dialog.open) {
+      return;
+    }
+
+    setStopId(defaultStopId ?? "");
+  }, [defaultStopId, dialogRef]);
 
   const closeDialog = () => {
     dialogRef.current?.close();
@@ -58,6 +85,7 @@ export default function ActivityCreate({
     setName("");
     setNote("");
     setCategoryId("");
+    setStopId(defaultStopId ?? "");
     onDismiss?.();
   };
 
@@ -138,10 +166,20 @@ export default function ActivityCreate({
           </div>
 
           <div className={dialogStyles.field}>
+            <label htmlFor={stopFieldId}>Place</label>
+            <StopSelect
+              id={stopFieldId}
+              stops={stops}
+              value={stopId}
+              onChange={chooseStop}
+            />
+          </div>
+
+          <div className={dialogStyles.field}>
             <label htmlFor={categoryFieldId}>Category</label>
             <CategorySelect
               id={categoryFieldId}
-              categories={categories}
+              categories={placeCategories}
               value={categoryId}
               onChange={setCategoryId}
             />

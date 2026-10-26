@@ -188,11 +188,22 @@ export async function updateItinerary(formData: FormData) {
 }
 
 const createCategoryMutation = /* GraphQL */ `
-  mutation CreateCategory($itineraryId: ID!, $name: String!, $color: String!) {
-    createCategory(itineraryId: $itineraryId, name: $name, color: $color) {
+  mutation CreateCategory(
+    $itineraryId: ID!
+    $name: String!
+    $color: String!
+    $stopId: ID
+  ) {
+    createCategory(
+      itineraryId: $itineraryId
+      name: $name
+      color: $color
+      stopId: $stopId
+    ) {
       id
       name
       color
+      stopId
     }
   }
 `;
@@ -201,8 +212,9 @@ export async function createCategory(formData: FormData) {
   const itineraryId = String(formData.get("itineraryId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const color = String(formData.get("color") ?? "").trim();
+  const stopId = String(formData.get("stopId") ?? "").trim() || null;
 
-  await executeGraphQL(createCategoryMutation, { itineraryId, name, color });
+  await executeGraphQL(createCategoryMutation, { itineraryId, name, color, stopId });
   revalidatePath(`/itineraries/${itineraryId}`);
 }
 
@@ -232,6 +244,55 @@ const deleteCategoryMutation = /* GraphQL */ `
   }
 `;
 
+const createStopMutation = /* GraphQL */ `
+  mutation CreateStop($itineraryId: ID!, $name: String!) {
+    createStop(itineraryId: $itineraryId, name: $name) {
+      id
+      name
+    }
+  }
+`;
+
+export async function createStop(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+
+  await executeGraphQL(createStopMutation, { itineraryId, name });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const updateStopMutation = /* GraphQL */ `
+  mutation UpdateStop($id: ID!, $name: String!) {
+    updateStop(id: $id, name: $name) {
+      id
+      name
+    }
+  }
+`;
+
+export async function updateStop(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+
+  await executeGraphQL(updateStopMutation, { id, name });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
+const deleteStopMutation = /* GraphQL */ `
+  mutation DeleteStop($id: ID!) {
+    deleteStop(id: $id)
+  }
+`;
+
+export async function deleteStop(formData: FormData) {
+  const itineraryId = String(formData.get("itineraryId") ?? "");
+  const id = String(formData.get("id") ?? "");
+
+  await executeGraphQL(deleteStopMutation, { id });
+  revalidatePath(`/itineraries/${itineraryId}`);
+}
+
 export async function deleteCategory(formData: FormData) {
   const itineraryId = String(formData.get("itineraryId") ?? "");
   const id = String(formData.get("id") ?? "");
@@ -246,6 +307,7 @@ const createActivityMutation = /* GraphQL */ `
     $name: String!
     $note: String!
     $categoryId: ID
+    $stopId: ID
     $inSidebar: Boolean
     $date: String
     $startTime: String
@@ -256,6 +318,7 @@ const createActivityMutation = /* GraphQL */ `
       name: $name
       note: $note
       categoryId: $categoryId
+      stopId: $stopId
       inSidebar: $inSidebar
       date: $date
       startTime: $startTime
@@ -265,6 +328,7 @@ const createActivityMutation = /* GraphQL */ `
       name
       note
       categoryId
+      stopId
     }
   }
 `;
@@ -274,6 +338,7 @@ export async function createActivity(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
+  const stopId = String(formData.get("stopId") ?? "").trim();
   const date = String(formData.get("date") ?? "").trim();
   const startTime = String(formData.get("startTime") ?? "").trim();
   const endTime = String(formData.get("endTime") ?? "").trim();
@@ -284,6 +349,7 @@ export async function createActivity(formData: FormData) {
     name,
     note,
     categoryId: categoryId || null,
+    stopId: stopId || null,
     inSidebar,
     date: date || null,
     startTime: startTime || null,
@@ -293,12 +359,13 @@ export async function createActivity(formData: FormData) {
 }
 
 const updateActivityMutation = /* GraphQL */ `
-  mutation UpdateActivity($id: ID!, $name: String!, $note: String!, $categoryId: ID) {
-    updateActivity(id: $id, name: $name, note: $note, categoryId: $categoryId) {
+  mutation UpdateActivity($id: ID!, $name: String!, $note: String!, $categoryId: ID, $stopId: ID) {
+    updateActivity(id: $id, name: $name, note: $note, categoryId: $categoryId, stopId: $stopId) {
       id
       name
       note
       categoryId
+      stopId
     }
   }
 `;
@@ -309,12 +376,14 @@ export async function updateActivity(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
+  const stopId = String(formData.get("stopId") ?? "").trim();
 
   await executeGraphQL(updateActivityMutation, {
     id,
     name,
     note,
     categoryId: categoryId || null,
+    stopId: stopId || null,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }

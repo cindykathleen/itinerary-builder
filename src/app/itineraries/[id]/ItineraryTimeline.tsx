@@ -8,6 +8,7 @@ import dialogStyles from "../dialog.module.css";
 import ActivityCreate, { type ActivitySlot } from "./ActivityCreate";
 import { categoryTextColor } from "./CategoryItem";
 import type { CategoryOption } from "./CategorySelect";
+import type { StopOption } from "./StopSelect";
 import DayHeader from "./DayHeader";
 import styles from "./ItineraryTimeline.module.css";
 
@@ -235,6 +236,7 @@ export default function ItineraryTimeline({
   daySettings,
   activities,
   categories,
+  stops,
 }: {
   itineraryId: string;
   dateStart: string;
@@ -246,6 +248,7 @@ export default function ItineraryTimeline({
   daySettings: { date: string; heading: string | null }[];
   activities: TimelineActivity[];
   categories: CategoryOption[];
+  stops: StopOption[];
 }) {
   const days = listDays(dateStart, dateEnd);
   const slots = listSlots(dayStart, dayEnd, timeInterval);
@@ -956,6 +959,7 @@ export default function ItineraryTimeline({
       <ActivityCreate
         itineraryId={itineraryId}
         categories={categories}
+        stops={stops}
         dialogRef={createRef}
         slot={pendingCreate}
         onDismiss={() => setPendingCreate(null)}

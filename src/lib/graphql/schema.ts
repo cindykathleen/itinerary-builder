@@ -140,6 +140,32 @@ function parseHexColor(value: string) {
   return `#${digits}`;
 }
 
+async function assertCategoryMatchesPlace(
+  categoryId: string,
+  itineraryId: string,
+  stopId: string | null,
+) {
+  const category = await pool.query<{ stop_id: string | null }>(
+    `SELECT stop_id
+     FROM categories
+     WHERE id = $1 AND itinerary_id = $2`,
+    [categoryId, itineraryId],
+  );
+  const row = category.rows[0];
+
+  if (!row) {
+    throw new GraphQLError("Category not found.", {
+      extensions: { code: "NOT_FOUND" },
+    });
+  }
+
+  if ((row.stop_id ?? null) !== stopId) {
+    throw new GraphQLError("Choose a category for this place.", {
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  }
+}
+
 export const schema = createSchema({
   typeDefs: /* GraphQL */ `
     enum ItineraryStatus {
@@ -163,6 +189,7 @@ export const schema = createSchema({
       scheduleConfigured: Boolean!
       daySettings: [ItineraryDay!]!
       categories: [Category!]!
+      stops: [Stop!]!
       activities: [Activity!]!
     }
 
@@ -175,6 +202,13 @@ export const schema = createSchema({
       id: ID!
       name: String!
       color: String!
+      logistics: Boolean!
+      stopId: ID
+    }
+
+    type Stop {
+      id: ID!
+      name: String!
     }
 
     type Activity {
@@ -182,6 +216,7 @@ export const schema = createSchema({
       name: String!
       note: String
       categoryId: ID
+      stopId: ID
       inSidebar: Boolean!
       startDate: String
       startTime: String
@@ -220,20 +255,29 @@ export const schema = createSchema({
         timeInterval: Int!
       ): Itinerary!
       deleteItinerary(id: ID!): Boolean!
-      createCategory(itineraryId: ID!, name: String!, color: String!): Category!
+      createCategory(
+        itineraryId: ID!
+        name: String!
+        color: String!
+        stopId: ID
+      ): Category!
       updateCategory(id: ID!, name: String!, color: String!): Category!
       deleteCategory(id: ID!): Boolean!
+      createStop(itineraryId: ID!, name: String!): Stop!
+      updateStop(id: ID!, name: String!): Stop!
+      deleteStop(id: ID!): Boolean!
       createActivity(
         itineraryId: ID!
         name: String!
         note: String!
         categoryId: ID
+        stopId: ID
         inSidebar: Boolean
         date: String
         startTime: String
         endTime: String
       ): Activity!
-      updateActivity(id: ID!, name: String!, note: String!, categoryId: ID): Activity!
+      updateActivity(id: ID!, name: String!, note: String!, categoryId: ID, stopId: ID): Activity!
       scheduleActivity(
         id: ID!
         itineraryId: ID!
@@ -259,11 +303,28 @@ export const schema = createSchema({
         return result.rows;
       },
       categories: async (parent: { id: string }) => {
-        const result = await pool.query<{ id: string; name: string; color: string }>(
-          `SELECT id, name, color
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          color: string;
+          logistics: boolean;
+          stopId: string | null;
+        }>(
+          `SELECT id, name, color, logistics, stop_id AS "stopId"
            FROM categories
            WHERE itinerary_id = $1
            ORDER BY created_at, name`,
+          [parent.id],
+        );
+
+        return result.rows;
+      },
+      stops: async (parent: { id: string }) => {
+        const result = await pool.query<{ id: string; name: string }>(
+          `SELECT id, name
+           FROM stops
+           WHERE itinerary_id = $1
+           ORDER BY position, created_at, name`,
           [parent.id],
         );
 
@@ -275,6 +336,7 @@ export const schema = createSchema({
           name: string;
           note: string | null;
           category_id: string | null;
+          stop_id: string | null;
           in_sidebar: boolean;
           start_date: string | null;
           start_time: string | null;
@@ -285,6 +347,7 @@ export const schema = createSchema({
                   activities.name,
                   activities.note,
                   activities.category_id,
+                  activities.stop_id,
                   activities.in_sidebar,
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'YYYY-MM-DD') AS start_date,
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS start_time,
@@ -302,6 +365,7 @@ export const schema = createSchema({
           name: activity.name,
           note: activity.note,
           categoryId: activity.category_id,
+          stopId: activity.stop_id,
           inSidebar: activity.in_sidebar,
           startDate: activity.start_date,
           startTime: activity.start_time,
@@ -398,28 +462,51 @@ export const schema = createSchema({
           });
         }
 
-        const result = await pool.query<ItineraryRow>(
-          `INSERT INTO itineraries (
-             owner_id,
-             name,
-             destination,
-             date_start,
-             date_end,
-             day_start,
-             day_end,
-             time_interval,
-             time_format,
-             timezone
-           )
-           VALUES (
-             $1, $2, $3, $4::date, $5::date,
-             TIME '09:00', TIME '21:00', 30, '12h', 'UTC'
-           )
-           RETURNING ${itineraryColumns}`,
-          [context.userId, name, destination, dateStart, dateEnd],
-        );
+        const client = await pool.connect();
 
-        return toItinerary(result.rows[0]);
+        try {
+          await client.query("BEGIN");
+          const result = await client.query<ItineraryRow>(
+            `INSERT INTO itineraries (
+               owner_id,
+               name,
+               destination,
+               date_start,
+               date_end,
+               day_start,
+               day_end,
+               time_interval,
+               time_format,
+               timezone
+             )
+             VALUES (
+               $1, $2, $3, $4::date, $5::date,
+               TIME '09:00', TIME '21:00', 30, '12h', 'UTC'
+             )
+             RETURNING ${itineraryColumns}`,
+            [context.userId, name, destination, dateStart, dateEnd],
+          );
+          const itinerary = result.rows[0];
+
+          await client.query(
+            `INSERT INTO categories (itinerary_id, name, color, logistics, created_at)
+             VALUES ($1, 'Transportation', '#DDEDE7', true, clock_timestamp())`,
+            [itinerary.id],
+          );
+          await client.query(
+            `INSERT INTO categories (itinerary_id, name, color, logistics, created_at)
+             VALUES ($1, 'Accommodations', '#E8DFF0', true, clock_timestamp())`,
+            [itinerary.id],
+          );
+          await client.query("COMMIT");
+
+          return toItinerary(itinerary);
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
       },
       updateItineraryStatus: async (
         _parent,
@@ -536,7 +623,6 @@ export const schema = createSchema({
            RETURNING ${itineraryColumns}`,
           [dayStart, dayEnd, timeInterval, args.id, context.userId],
         );
-
         const itinerary = result.rows[0];
 
         if (!itinerary) {
@@ -749,7 +835,7 @@ export const schema = createSchema({
       },
       createCategory: async (
         _parent,
-        args: { itineraryId: string; name: string; color: string },
+        args: { itineraryId: string; name: string; color: string; stopId?: string | null },
         context: GraphQLContext,
       ) => {
         if (!context.userId) {
@@ -792,11 +878,34 @@ export const schema = createSchema({
           });
         }
 
-        const result = await pool.query<{ id: string; name: string; color: string }>(
-          `INSERT INTO categories (itinerary_id, name, color)
-           VALUES ($1, $2, $3)
-           RETURNING id, name, color`,
-          [args.itineraryId, name, color],
+        const stopId = args.stopId?.trim() || null;
+
+        if (stopId) {
+          const stop = await pool.query(
+            `SELECT id
+             FROM stops
+             WHERE id = $1 AND itinerary_id = $2`,
+            [stopId, args.itineraryId],
+          );
+
+          if (!stop.rows[0]) {
+            throw new GraphQLError("Place not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+        }
+
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          color: string;
+          logistics: boolean;
+          stopId: string | null;
+        }>(
+          `INSERT INTO categories (itinerary_id, name, color, logistics, stop_id)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, name, color, logistics, stop_id AS "stopId"`,
+          [args.itineraryId, name, color, stopId === null, stopId],
         );
 
         return result.rows[0];
@@ -833,14 +942,20 @@ export const schema = createSchema({
           });
         }
 
-        const result = await pool.query<{ id: string; name: string; color: string }>(
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          color: string;
+          logistics: boolean;
+          stopId: string | null;
+        }>(
           `UPDATE categories
            SET name = $1, color = $2
            WHERE id = $3
              AND itinerary_id IN (
                SELECT id FROM itineraries WHERE owner_id = $4
              )
-           RETURNING id, name, color`,
+           RETURNING id, name, color, logistics, stop_id AS "stopId"`,
           [name, color, args.id, context.userId],
         );
 
@@ -883,6 +998,148 @@ export const schema = createSchema({
 
         return true;
       },
+      createStop: async (
+        _parent,
+        args: { itineraryId: string; name: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to create places.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+
+        if (!name) {
+          throw new GraphQLError("Place name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Place name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const owned = await pool.query(
+          `SELECT id
+           FROM itineraries
+           WHERE id = $1 AND owner_id = $2`,
+          [args.itineraryId, context.userId],
+        );
+
+        if (!owned.rows[0]) {
+          throw new GraphQLError("Itinerary not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+          const result = await client.query<{ id: string; name: string }>(
+            `INSERT INTO stops (itinerary_id, name, position)
+             SELECT $1, $2, COALESCE(MAX(position) + 1, 0)
+             FROM stops
+             WHERE itinerary_id = $1
+             RETURNING id, name`,
+            [args.itineraryId, name],
+          );
+          const stop = result.rows[0];
+
+          await client.query(
+            `INSERT INTO categories (itinerary_id, name, color, logistics, stop_id, created_at)
+             VALUES
+               ($1, 'Restaurants', '#FFE5F2', false, $2, clock_timestamp()),
+               ($1, 'Bars', '#F4D0E1', false, $2, clock_timestamp() + interval '1 millisecond'),
+               ($1, 'Coffee', '#E9E0D8', false, $2, clock_timestamp() + interval '2 milliseconds'),
+               ($1, 'Activities', '#D6E5F5', false, $2, clock_timestamp() + interval '3 milliseconds')`,
+            [args.itineraryId, stop.id],
+          );
+          await client.query("COMMIT");
+
+          return stop;
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      },
+      updateStop: async (
+        _parent,
+        args: { id: string; name: string },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to edit places.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const name = args.name.trim();
+
+        if (!name) {
+          throw new GraphQLError("Place name is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (name.length > 255) {
+          throw new GraphQLError("Place name must be 255 characters or fewer.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const result = await pool.query<{ id: string; name: string }>(
+          `UPDATE stops
+           SET name = $1
+           WHERE id = $2
+             AND itinerary_id IN (
+               SELECT id FROM itineraries WHERE owner_id = $3
+             )
+           RETURNING id, name`,
+          [name, args.id, context.userId],
+        );
+
+        const stop = result.rows[0];
+
+        if (!stop) {
+          throw new GraphQLError("Place not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return stop;
+      },
+      deleteStop: async (_parent, args: { id: string }, context: GraphQLContext) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to delete places.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const result = await pool.query(
+          `DELETE FROM stops
+           WHERE id = $1
+             AND itinerary_id IN (
+               SELECT id FROM itineraries WHERE owner_id = $2
+             )
+           RETURNING id`,
+          [args.id, context.userId],
+        );
+
+        if (!result.rows[0]) {
+          throw new GraphQLError("Place not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        return true;
+      },
       createActivity: async (
         _parent,
         args: {
@@ -890,6 +1147,7 @@ export const schema = createSchema({
           name: string;
           note: string;
           categoryId?: string | null;
+          stopId?: string | null;
           inSidebar?: boolean | null;
           date?: string | null;
           startTime?: string | null;
@@ -907,6 +1165,7 @@ export const schema = createSchema({
         const note = args.note.trim();
         const inSidebar = args.inSidebar !== false;
         const categoryId = args.categoryId?.trim() || null;
+        const stopId = args.stopId?.trim() || null;
 
         if (!name) {
           throw new GraphQLError("Activity name is required.", {
@@ -982,15 +1241,19 @@ export const schema = createSchema({
         }
 
         if (categoryId) {
-          const category = await pool.query(
+          await assertCategoryMatchesPlace(categoryId, args.itineraryId, stopId);
+        }
+
+        if (stopId) {
+          const stop = await pool.query(
             `SELECT id
-             FROM categories
+             FROM stops
              WHERE id = $1 AND itinerary_id = $2`,
-            [categoryId, args.itineraryId],
+            [stopId, args.itineraryId],
           );
 
-          if (!category.rows[0]) {
-            throw new GraphQLError("Category not found.", {
+          if (!stop.rows[0]) {
+            throw new GraphQLError("Place not found.", {
               extensions: { code: "NOT_FOUND" },
             });
           }
@@ -1001,28 +1264,31 @@ export const schema = createSchema({
           name: string;
           note: string | null;
           category_id: string | null;
+          stop_id: string | null;
         }>(
           scheduling
             ? `INSERT INTO activities (
-                 itinerary_id, category_id, name, note, start_at, end_at, in_sidebar
+                 itinerary_id, category_id, stop_id, name, note, start_at, end_at, in_sidebar
                )
                VALUES (
                  $1,
                  $2,
                  $3,
                  $4,
-                 (($5::date + $6::time) AT TIME ZONE $8),
-                 (($5::date + $7::time) AT TIME ZONE $8),
-                 $9
+                 $5,
+                 (($6::date + $7::time) AT TIME ZONE $9),
+                 (($6::date + $8::time) AT TIME ZONE $9),
+                 $10
                )
-               RETURNING id, name, note, category_id`
-            : `INSERT INTO activities (itinerary_id, category_id, name, note, in_sidebar)
-               VALUES ($1, $2, $3, $4, $5)
-               RETURNING id, name, note, category_id`,
+               RETURNING id, name, note, category_id, stop_id`
+            : `INSERT INTO activities (itinerary_id, category_id, stop_id, name, note, in_sidebar)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id, name, note, category_id, stop_id`,
           scheduling
             ? [
                 args.itineraryId,
                 categoryId,
+                stopId,
                 name,
                 note || null,
                 scheduleDate,
@@ -1031,7 +1297,7 @@ export const schema = createSchema({
                 itinerary.timezone,
                 inSidebar,
               ]
-            : [args.itineraryId, categoryId, name, note || null, inSidebar],
+            : [args.itineraryId, categoryId, stopId, name, note || null, inSidebar],
         );
 
         const activity = result.rows[0];
@@ -1041,11 +1307,18 @@ export const schema = createSchema({
           name: activity.name,
           note: activity.note,
           categoryId: activity.category_id,
+          stopId: activity.stop_id,
         };
       },
       updateActivity: async (
         _parent,
-        args: { id: string; name: string; note: string; categoryId?: string | null },
+        args: {
+          id: string;
+          name: string;
+          note: string;
+          categoryId?: string | null;
+          stopId?: string | null;
+        },
         context: GraphQLContext,
       ) => {
         if (!context.userId) {
@@ -1057,6 +1330,7 @@ export const schema = createSchema({
         const name = args.name.trim();
         const note = args.note.trim();
         const categoryId = args.categoryId?.trim() || null;
+        const stopId = args.stopId?.trim() || null;
 
         if (!name) {
           throw new GraphQLError("Activity name is required.", {
@@ -1087,15 +1361,19 @@ export const schema = createSchema({
         }
 
         if (categoryId) {
-          const category = await pool.query(
+          await assertCategoryMatchesPlace(categoryId, activityRow.itinerary_id, stopId);
+        }
+
+        if (stopId) {
+          const stop = await pool.query(
             `SELECT id
-             FROM categories
+             FROM stops
              WHERE id = $1 AND itinerary_id = $2`,
-            [categoryId, activityRow.itinerary_id],
+            [stopId, activityRow.itinerary_id],
           );
 
-          if (!category.rows[0]) {
-            throw new GraphQLError("Category not found.", {
+          if (!stop.rows[0]) {
+            throw new GraphQLError("Place not found.", {
               extensions: { code: "NOT_FOUND" },
             });
           }
@@ -1106,15 +1384,17 @@ export const schema = createSchema({
           name: string;
           note: string | null;
           category_id: string | null;
+          stop_id: string | null;
         }>(
           `UPDATE activities
            SET name = $1,
                note = $2,
                category_id = $3,
+               stop_id = $4,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $4 AND itinerary_id = $5
-           RETURNING id, name, note, category_id`,
-          [name, note || null, categoryId, args.id, activityRow.itinerary_id],
+           WHERE id = $5 AND itinerary_id = $6
+           RETURNING id, name, note, category_id, stop_id`,
+          [name, note || null, categoryId, stopId, args.id, activityRow.itinerary_id],
         );
 
         const activity = result.rows[0];
@@ -1124,6 +1404,7 @@ export const schema = createSchema({
           name: activity.name,
           note: activity.note,
           categoryId: activity.category_id,
+          stopId: activity.stop_id,
         };
       },
       scheduleActivity: async (

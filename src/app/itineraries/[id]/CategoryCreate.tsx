@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { createCategory } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import StopSelect, { type StopOption } from "./StopSelect";
 
 const DEFAULT_COLOR = "E0E6ED";
 
@@ -26,9 +27,13 @@ function CreateButton({ disabled }: { disabled: boolean }) {
 
 export default function CategoryCreate({
   itineraryId,
+  stops,
+  defaultStopId = null,
   dialogRef,
 }: {
   itineraryId: string;
+  stops: StopOption[];
+  defaultStopId?: string | null;
   dialogRef: RefObject<HTMLDialogElement | null>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -37,11 +42,22 @@ export default function CategoryCreate({
   const previewRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [stopId, setStopId] = useState(defaultStopId ?? "");
   const colorComplete = /^[0-9A-Fa-f]{6}$/.test(color);
   const colorError = color !== "" && !colorComplete;
   const canSubmit = name.trim() !== "" && !colorError;
   const previewColor = colorComplete ? `#${color}` : "var(--surface)";
   const pickerValue = (colorComplete ? `#${color}` : `#${DEFAULT_COLOR}`).toLowerCase();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog || dialog.open) {
+      return;
+    }
+
+    setStopId(defaultStopId ?? "");
+  }, [defaultStopId, dialogRef]);
 
   const closeDialog = () => {
     dialogRef.current?.close();
@@ -51,6 +67,7 @@ export default function CategoryCreate({
     formRef.current?.reset();
     setName("");
     setColor(DEFAULT_COLOR);
+    setStopId(defaultStopId ?? "");
     colorRef.current?.setCustomValidity("");
   };
 
@@ -146,6 +163,16 @@ export default function CategoryCreate({
               onChange={(event) => setName(event.target.value)}
               maxLength={255}
               required
+            />
+          </div>
+
+          <div className={dialogStyles.field}>
+            <label htmlFor="category-place">Place</label>
+            <StopSelect
+              id="category-place"
+              stops={stops}
+              value={stopId}
+              onChange={setStopId}
             />
           </div>
 

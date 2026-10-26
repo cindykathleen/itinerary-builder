@@ -4,14 +4,21 @@ import { useRef } from "react";
 import ActivityCreate from "./ActivityCreate";
 import CategoryCreate from "./CategoryCreate";
 import type { CategoryOption } from "./CategorySelect";
+import type { StopOption } from "./StopSelect";
 import styles from "./page.module.css";
 
 export default function ActivityAdd({
   itineraryId,
   categories,
+  stops,
+  defaultStopId = null,
+  onNewPlace,
 }: {
   itineraryId: string;
   categories: CategoryOption[];
+  stops: StopOption[];
+  defaultStopId?: string | null;
+  onNewPlace: () => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const categoryDialogRef = useRef<HTMLDialogElement>(null);
@@ -31,6 +38,11 @@ export default function ActivityAdd({
     activityDialogRef.current?.showModal();
   };
 
+  const openPlaceDialog = () => {
+    closeMenu();
+    onNewPlace();
+  };
+
   return (
     <>
       <details ref={menuRef} className={styles.addMenu}>
@@ -38,6 +50,11 @@ export default function ActivityAdd({
           <span aria-hidden="true">+</span>
         </summary>
         <ul className={styles.addDropdown}>
+          <li>
+            <button className={styles.addAction} type="button" onClick={openPlaceDialog}>
+              New place
+            </button>
+          </li>
           <li>
             <button className={styles.addAction} type="button" onClick={openCategoryDialog}>
               New category
@@ -50,10 +67,17 @@ export default function ActivityAdd({
           </li>
         </ul>
       </details>
-      <CategoryCreate itineraryId={itineraryId} dialogRef={categoryDialogRef} />
+      <CategoryCreate
+        itineraryId={itineraryId}
+        stops={stops}
+        defaultStopId={defaultStopId}
+        dialogRef={categoryDialogRef}
+      />
       <ActivityCreate
         itineraryId={itineraryId}
         categories={categories}
+        stops={stops}
+        defaultStopId={defaultStopId}
         dialogRef={activityDialogRef}
       />
     </>

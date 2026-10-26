@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { deleteActivity, updateActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
-import CategorySelect, { type CategoryOption } from "./CategorySelect";
+import CategorySelect, { categoriesForStop, type CategoryOption } from "./CategorySelect";
+import StopSelect, { type StopOption } from "./StopSelect";
 import styles from "./page.module.css";
 
 function SaveButton({ disabled }: { disabled: boolean }) {
@@ -25,16 +26,20 @@ export default function ActivityItem({
   name: activityName,
   note: activityNote,
   categoryId: activityCategoryId,
+  stopId: activityStopId,
   scheduled,
   categories,
+  stops,
 }: {
   itineraryId: string;
   id: string;
   name: string;
   note: string | null;
   categoryId: string | null;
+  stopId: string | null;
   scheduled: boolean;
   categories: CategoryOption[];
+  stops: StopOption[];
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const dropdownRef = useRef<HTMLUListElement>(null);
@@ -43,10 +48,30 @@ export default function ActivityItem({
   const [name, setName] = useState(activityName);
   const [note, setNote] = useState(activityNote ?? "");
   const [categoryId, setCategoryId] = useState(activityCategoryId ?? "");
+  const [stopId, setStopId] = useState(activityStopId ?? "");
+  const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
+
+  const chooseStop = (nextStopId: string) => {
+    setStopId(nextStopId);
+    setCategoryId((current) =>
+      categoriesForStop(categories, nextStopId).some((category) => category.id === current)
+        ? current
+        : "",
+    );
+  };
+
+  useEffect(() => {
+    if (dialogRef.current?.open) {
+      return;
+    }
+
+    setStopId(activityStopId ?? "");
+  }, [activityStopId]);
   const nameId = `activity-edit-name-${id}`;
   const noteId = `activity-edit-note-${id}`;
   const categoryFieldId = `activity-edit-category-${id}`;
+  const stopFieldId = `activity-edit-place-${id}`;
   const titleId = `activity-edit-title-${id}`;
   const confirmTitleId = `activity-delete-title-${id}`;
 
@@ -54,6 +79,7 @@ export default function ActivityItem({
     setName(activityName);
     setNote(activityNote ?? "");
     setCategoryId(activityCategoryId ?? "");
+    setStopId(activityStopId ?? "");
   };
 
   const closeMenu = () => {
@@ -193,10 +219,20 @@ export default function ActivityItem({
             </div>
 
             <div className={dialogStyles.field}>
+              <label htmlFor={stopFieldId}>Place</label>
+              <StopSelect
+                id={stopFieldId}
+                stops={stops}
+                value={stopId}
+                onChange={chooseStop}
+              />
+            </div>
+
+            <div className={dialogStyles.field}>
               <label htmlFor={categoryFieldId}>Category</label>
               <CategorySelect
                 id={categoryFieldId}
-                categories={categories}
+                categories={placeCategories}
                 value={categoryId}
                 onChange={setCategoryId}
               />

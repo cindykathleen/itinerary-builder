@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
-import ActivityAdd from "./ActivityAdd";
-import CategoryItem from "./CategoryItem";
+import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
 import ItineraryTimeline from "./ItineraryTimeline";
@@ -29,12 +28,19 @@ const itineraryQuery = /* GraphQL */ `
         id
         name
         color
+        logistics
+        stopId
+      }
+      stops {
+        id
+        name
       }
       activities {
         id
         name
         note
         categoryId
+        stopId
         inSidebar
         startDate
         startTime
@@ -64,12 +70,19 @@ type ItineraryQuery = {
       id: string;
       name: string;
       color: string;
+      logistics: boolean;
+      stopId: string | null;
+    }[];
+    stops: {
+      id: string;
+      name: string;
     }[];
     activities: {
       id: string;
       name: string;
       note: string | null;
       categoryId: string | null;
+      stopId: string | null;
       inSidebar: boolean;
       startDate: string | null;
       startTime: string | null;
@@ -79,26 +92,6 @@ type ItineraryQuery = {
 };
 
 type ItineraryView = "activities" | "map";
-
-function sidebarActivities(
-  activities: {
-    id: string;
-    name: string;
-    note: string | null;
-    startDate: string | null;
-  }[],
-) {
-  return [...activities]
-    .sort(
-      (left, right) => Number(left.startDate !== null) - Number(right.startDate !== null),
-    )
-    .map((activity) => ({
-      id: activity.id,
-      name: activity.name,
-      note: activity.note,
-      scheduled: activity.startDate !== null,
-    }));
-}
 
 function parseView(value: string | string[] | undefined): ItineraryView {
   const view = Array.isArray(value) ? value[0] : value;
@@ -129,14 +122,23 @@ export default async function ItineraryPage({
     id: category.id,
     name: category.name,
     color: category.color,
+    logistics: category.logistics,
+    stopId: category.stopId,
   }));
-  const categoryIds = new Set(itinerary.categories.map((category) => category.id));
-  const sidebarItems = itinerary.activities.filter((activity) => activity.inSidebar);
-  const uncategorized = sidebarActivities(
-    sidebarItems.filter(
-      (activity) => activity.categoryId === null || !categoryIds.has(activity.categoryId),
-    ),
-  );
+  const stops = itinerary.stops.map((stop) => ({
+    id: stop.id,
+    name: stop.name,
+  }));
+  const sidebarItems = itinerary.activities
+    .filter((activity) => activity.inSidebar)
+    .map((activity) => ({
+      id: activity.id,
+      name: activity.name,
+      note: activity.note,
+      categoryId: activity.categoryId,
+      stopId: activity.stopId,
+      startDate: activity.startDate,
+    }));
 
   return (
     <main className={`page ${styles.page}`}>
@@ -160,41 +162,12 @@ export default async function ItineraryPage({
       </header>
 
       {view === "activities" ? (
-        <section className={`${styles.side} ${styles.activities}`} aria-label="Activities">
-          <header className={styles.activitiesHeader}>
-            <h2 className={styles.activitiesTitle}>Activities</h2>
-            <ActivityAdd itineraryId={itinerary.id} categories={categories} />
-          </header>
-          {itinerary.categories.length > 0 || uncategorized.length > 0 ? (
-            <ul className={styles.categoryList}>
-              {itinerary.categories.map((category) => (
-                <CategoryItem
-                  key={category.id}
-                  itineraryId={itinerary.id}
-                  id={category.id}
-                  name={category.name}
-                  color={category.color}
-                  categories={categories}
-                  activities={sidebarActivities(
-                    sidebarItems.filter((activity) => activity.categoryId === category.id),
-                  )}
-                />
-              ))}
-              {uncategorized.length > 0 ? (
-                <CategoryItem
-                  key="uncategorized"
-                  itineraryId={itinerary.id}
-                  id="uncategorized"
-                  name="Uncategorized"
-                  color="var(--surface)"
-                  readOnly
-                  categories={categories}
-                  activities={uncategorized}
-                />
-              ) : null}
-            </ul>
-          ) : null}
-        </section>
+        <ActivitySidebar
+          itineraryId={itinerary.id}
+          categories={categories}
+          stops={stops}
+          activities={sidebarItems}
+        />
       ) : (
         <section className={styles.side} aria-label="Map" />
       )}
@@ -209,6 +182,7 @@ export default async function ItineraryPage({
           timeInterval={itinerary.timeInterval}
           timeFormat={itinerary.timeFormat}
           categories={categories}
+          stops={stops}
           daySettings={itinerary.daySettings.map((day) => ({
             date: day.date.slice(0, 10),
             heading: day.heading,

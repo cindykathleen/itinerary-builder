@@ -404,6 +404,298 @@
   background-color: var(--background);
 }
 
+.stopsWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.stopsMeasure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  width: max-content;
+  padding: 4px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.stopsMeasure > span {
+  flex: 0 0 auto;
+  padding: 8px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.stops {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0 16px 12px 0;
+  padding: 4px;
+  border-radius: 8px;
+  background-color: var(--surface);
+}
+
+.placeMenu {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+.placeMenuTrigger,
+.placeMenuTrigger:hover {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.placeMenuLabel {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeMenuChevron {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.placeMenu .stopMenu,
+.placeMenu:hover .stopMenu,
+.placeMenu:focus-within .stopMenu,
+.placeMenu .stopMenu[open] {
+  position: static;
+  width: auto;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.placeMenu .stopMenuTrigger,
+.placeMenu .stopMenuTrigger:hover,
+.placeMenu:hover .stopMenuTrigger,
+.placeMenu:focus-within .stopMenuTrigger,
+.placeMenu .stopMenu[open] .stopMenuTrigger {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  opacity: 1;
+}
+
+.placeMenuList {
+  z-index: 4;
+  max-height: 280px;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.placeMenuOption,
+.placeMenuOption:hover {
+  width: 100%;
+  padding: 8px 16px;
+  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeMenuOption:hover {
+  background-color: var(--background);
+}
+
+.placeMenuOption[aria-selected="true"],
+.placeMenuOption[aria-selected="true"]:hover {
+  color: #ffffff;
+  background-color: var(--primary);
+}
+
+.stops > .stop,
+.stops > .stop:hover,
+.stops > .stopTab {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.stopTab {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+}
+
+.stop,
+.stop:hover {
+  min-width: 0;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stopTab .stop,
+.stopTab .stop:hover {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.stopSelected,
+.stopSelected:hover,
+.stopTabSelected .stop,
+.stopTabSelected .stop:hover {
+  color: #ffffff;
+  background-color: var(--primary);
+}
+
+.stopMenu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stopTab:hover .stopMenu,
+.stopTab:focus-within .stopMenu,
+.stopMenu[open] {
+  width: auto;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.stopMenuTrigger,
+.stopMenuTrigger:hover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 24px;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.stopTab:hover .stopMenuTrigger,
+.stopTab:focus-within .stopMenuTrigger,
+.stopMenuTrigger:focus-visible,
+.stopMenu[open] .stopMenuTrigger,
+.stopTab:hover .stopMenuTrigger:hover,
+.stopTab:focus-within .stopMenuTrigger:hover,
+.stopMenu[open] .stopMenuTrigger:hover {
+  width: 24px;
+  margin-right: 4px;
+  opacity: 1;
+}
+
+.stopTabSelected .stopMenuTrigger,
+.stopTabSelected .stopMenuTrigger:hover {
+  color: #ffffff;
+}
+
+.stopMenuTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.stopMenuTrigger::marker {
+  content: "";
+}
+
+.stopMenu:not([open]) .stopMenuDropdown {
+  display: none;
+}
+
+.stopMenuDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 3;
+  min-width: 140px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.stopMenuAction,
+.stopMenuAction:hover {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.stopMenuAction:hover {
+  background-color: var(--background);
+}
+
 @media (max-width: 800px) {
   .page,
   .page:has(.activities) {
