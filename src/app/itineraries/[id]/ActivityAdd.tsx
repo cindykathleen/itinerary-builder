@@ -18,7 +18,7 @@ export default function ActivityAdd({
   categories: CategoryOption[];
   stops: StopOption[];
   defaultStopId?: string | null;
-  onNewPlace: () => void;
+  onNewPlace?: () => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const categoryDialogRef = useRef<HTMLDialogElement>(null);
@@ -40,7 +40,7 @@ export default function ActivityAdd({
 
   const openPlaceDialog = () => {
     closeMenu();
-    onNewPlace();
+    onNewPlace?.();
   };
 
   return (
@@ -50,11 +50,13 @@ export default function ActivityAdd({
           <span aria-hidden="true">+</span>
         </summary>
         <ul className={styles.addDropdown}>
-          <li>
-            <button className={styles.addAction} type="button" onClick={openPlaceDialog}>
-              New place
-            </button>
-          </li>
+          {onNewPlace ? (
+            <li>
+              <button className={styles.addAction} type="button" onClick={openPlaceDialog}>
+                New place
+              </button>
+            </li>
+          ) : null}
           <li>
             <button className={styles.addAction} type="button" onClick={openCategoryDialog}>
               New category

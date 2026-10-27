@@ -448,23 +448,24 @@ export default function ItineraryTimeline({
       setDraft({ date: day.iso, ...selection });
     };
 
-    const onUp = () => {
+    const onUp = (pointerEvent: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      setDraft(null);
-
-      if (!moved) {
-        return;
-      }
 
       const startMinutes = slots[selection.startIndex];
       const endMinutes = boundaryMinutes(selection.endIndex);
 
-      if (startMinutes === undefined || endMinutes <= startMinutes) {
+      if (
+        pointerEvent.type === "pointercancel" ||
+        startMinutes === undefined ||
+        endMinutes <= startMinutes
+      ) {
+        setDraft(null);
         return;
       }
 
+      setDraft({ date: day.iso, ...selection });
       setPendingCreate({
         date: day.iso,
         startTime: minutesToTime(startMinutes),
@@ -962,7 +963,10 @@ export default function ItineraryTimeline({
         stops={stops}
         dialogRef={createRef}
         slot={pendingCreate}
-        onDismiss={() => setPendingCreate(null)}
+        onDismiss={() => {
+          setPendingCreate(null);
+          setDraft(null);
+        }}
       />
 
       <dialog

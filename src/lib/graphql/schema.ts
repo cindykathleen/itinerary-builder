@@ -64,6 +64,17 @@ const itineraryColumns = `
   schedule_configured
 `;
 
+const TRASH_RETENTION = "14 days";
+
+async function purgeExpiredTrash() {
+  await pool.query(
+    `DELETE FROM itineraries
+     WHERE status = 'trashed'
+       AND trashed_at <= CURRENT_TIMESTAMP - $1::interval`,
+    [TRASH_RETENTION],
+  );
+}
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 const DEFAULT_CATEGORY_COLOR = "#E0E6ED"; // --surface
@@ -385,6 +396,8 @@ export const schema = createSchema({
           });
         }
 
+        await purgeExpiredTrash();
+
         const result = await pool.query<ItineraryRow>(
           `SELECT ${itineraryColumns}
            FROM itineraries
@@ -405,6 +418,8 @@ export const schema = createSchema({
             extensions: { code: "UNAUTHENTICATED" },
           });
         }
+
+        await purgeExpiredTrash();
 
         const result = await pool.query<ItineraryRow>(
           `SELECT ${itineraryColumns}
@@ -521,7 +536,13 @@ export const schema = createSchema({
 
         const result = await pool.query<ItineraryRow>(
           `UPDATE itineraries
-           SET status = $1, updated_at = CURRENT_TIMESTAMP
+           SET status = $1::varchar,
+               updated_at = CURRENT_TIMESTAMP,
+               trashed_at = CASE
+                 WHEN $1::varchar <> 'trashed' THEN NULL
+                 WHEN status = 'trashed' THEN COALESCE(trashed_at, CURRENT_TIMESTAMP)
+                 ELSE CURRENT_TIMESTAMP
+               END
            WHERE id = $2 AND owner_id = $3
            RETURNING ${itineraryColumns}`,
           [args.status, args.id, context.userId],

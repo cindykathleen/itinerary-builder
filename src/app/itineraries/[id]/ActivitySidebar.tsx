@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { RefObject, SubmitEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { createStop, deleteStop, updateStop } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
@@ -43,43 +43,12 @@ function listedActivities(activities: SidebarActivity[]) {
     }));
 }
 
-function StopTab({
-  stop,
-  selected,
-  onSelect,
-  onRename,
-  onDelete,
-}: {
-  stop: StopOption;
-  selected: boolean;
-  onSelect: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className={`${styles.stopTab} ${selected ? styles.stopTabSelected : ""}`}>
-      <button
-        className={styles.stop}
-        type="button"
-        role="tab"
-        aria-selected={selected}
-        onClick={onSelect}
-      >
-        {stop.name}
-      </button>
-      <PlaceActions name={stop.name} onRename={onRename} onDelete={onDelete} />
-    </div>
-  );
-}
-
 function PlaceActions({
   name,
-  anchorRef,
   onRename,
   onDelete,
 }: {
   name: string;
-  anchorRef?: RefObject<HTMLElement | null>;
   onRename: () => void;
   onDelete: () => void;
 }) {
@@ -98,10 +67,9 @@ function PlaceActions({
       return;
     }
 
-    const anchor = anchorRef?.current;
-    const rect = (anchor ?? menu).getBoundingClientRect();
+    const rect = menu.getBoundingClientRect();
     dropdown.style.position = "fixed";
-    dropdown.style.top = `${anchor ? rect.bottom : rect.bottom + 4}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
     dropdown.style.right = `${window.innerWidth - rect.right}px`;
     dropdown.style.left = "auto";
   };
@@ -141,7 +109,7 @@ function PlaceActions({
   );
 }
 
-function PlaceBar({
+function PlaceSelect({
   stops,
   selectedStopId,
   onSelect,
@@ -149,206 +117,103 @@ function PlaceBar({
   onDelete,
 }: {
   stops: StopOption[];
-  selectedStopId: string | null;
-  onSelect: (stopId: string | null) => void;
+  selectedStopId: string;
+  onSelect: (stopId: string) => void;
   onRename: (stop: StopOption) => void;
   onDelete: (stop: StopOption) => void;
 }) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
-  const [overflow, setOverflow] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const selectedStop = stops.find((stop) => stop.id === selectedStopId) ?? null;
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const selected = stops.find((stop) => stop.id === selectedStopId) ?? null;
 
-  useLayoutEffect(() => {
-    const bar = barRef.current;
-    const measure = measureRef.current;
-
-    if (!bar || !measure) {
-      return;
-    }
-
-    const update = () => {
-      const labels = [...measure.children] as HTMLElement[];
-      const count = labels.length;
-
-      if (count === 0) {
-        setOverflow(false);
-        return;
-      }
-
-      const barStyle = getComputedStyle(bar);
-      const padding = parseFloat(barStyle.paddingLeft) + parseFloat(barStyle.paddingRight);
-      const gap = parseFloat(barStyle.columnGap || "0");
-      const share = (bar.clientWidth - padding - gap * (count - 1)) / count;
-      const widest = Math.max(...labels.map((label) => label.offsetWidth));
-
-      setOverflow(widest > share + 1);
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(bar);
-
-    return () => observer.disconnect();
-  }, [stops]);
-
-  useEffect(() => {
-    if (!overflow) {
-      setMenuOpen(false);
-    }
-  }, [overflow]);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      setMenuOpen(false);
-    };
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-
-    const placeList = () => {
-      const bar = barRef.current;
-      const list = listRef.current;
-
-      if (!bar || !list) {
-        return;
-      }
-
-      const rect = bar.getBoundingClientRect();
-      list.style.top = `${rect.bottom}px`;
-      list.style.left = `${rect.left}px`;
-      list.style.width = `${rect.width}px`;
-    };
-
-    placeList();
-    document.addEventListener("keydown", onKeyDown, true);
-    document.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("resize", placeList);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      document.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("resize", placeList);
-    };
-  }, [menuOpen]);
-
-  const choose = (stopId: string | null) => {
+  const choose = (stopId: string) => {
     onSelect(stopId);
-    setMenuOpen(false);
+    menuRef.current?.removeAttribute("open");
   };
 
   return (
-    <div className={styles.stopsWrap}>
-      <div ref={measureRef} className={styles.stopsMeasure} aria-hidden="true">
-        <span>Logistics</span>
+    <details ref={menuRef} className={styles.placeSelect}>
+      <summary className={styles.placeTrigger}>
+        <span className={styles.placeTriggerLabel}>{selected?.name ?? ""}</span>
+        <span className={styles.placeChevron} aria-hidden="true" />
+      </summary>
+      <ul className={styles.placeList} role="listbox">
         {stops.map((stop) => (
-          <span key={stop.id} className={styles.stopsMeasurePlace}>
-            {stop.name}
-          </span>
-        ))}
-      </div>
-      <div
-        ref={barRef}
-        className={styles.stops}
-        role={overflow ? undefined : "tablist"}
-        aria-label="Places"
-      >
-        {overflow ? (
-          <div ref={menuRef} className={styles.placeMenu}>
+          <li key={stop.id} className={styles.placeOptionRow}>
             <button
-              className={styles.placeMenuTrigger}
+              className={styles.placeOption}
               type="button"
-              aria-haspopup="listbox"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
+              role="option"
+              aria-selected={selectedStopId === stop.id}
+              onClick={() => choose(stop.id)}
             >
-              <span className={styles.placeMenuLabel}>{selectedStop?.name ?? "Logistics"}</span>
-              <span className={styles.placeMenuChevron} aria-hidden="true" />
+              {stop.name}
             </button>
-            {selectedStop ? (
-              <PlaceActions
-                name={selectedStop.name}
-                anchorRef={barRef}
-                onRename={() => onRename(selectedStop)}
-                onDelete={() => onDelete(selectedStop)}
-              />
-            ) : null}
-            {menuOpen ? (
-              <ul ref={listRef} className={styles.placeMenuList} role="listbox">
-                <li>
-                  <button
-                    className={styles.placeMenuOption}
-                    type="button"
-                    role="option"
-                    aria-selected={selectedStopId === null}
-                    onClick={() => choose(null)}
-                  >
-                    Logistics
-                  </button>
-                </li>
-                {stops.map((stop) => (
-                  <li key={stop.id}>
-                    <button
-                      className={styles.placeMenuOption}
-                      type="button"
-                      role="option"
-                      aria-selected={selectedStopId === stop.id}
-                      onClick={() => choose(stop.id)}
-                    >
-                      {stop.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <div
-              className={`${styles.stopTab} ${
-                selectedStopId === null && stops.length > 0 ? styles.stopTabSelected : ""
-              }`}
-            >
-              <button
-                className={styles.stop}
-                type="button"
-                role="tab"
-                aria-selected={selectedStopId === null}
-                onClick={() => onSelect(null)}
-              >
-                Logistics
-              </button>
-            </div>
-            {stops.map((stop) => (
-              <StopTab
-                key={stop.id}
-                stop={stop}
-                selected={selectedStopId === stop.id}
-                onSelect={() => onSelect(stop.id)}
-                onRename={() => onRename(stop)}
-                onDelete={() => onDelete(stop)}
-              />
-            ))}
-          </>
-        )}
-      </div>
-    </div>
+            <PlaceActions
+              name={stop.name}
+              onRename={() => onRename(stop)}
+              onDelete={() => onDelete(stop)}
+            />
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function CategoryList({
+  itineraryId,
+  categories,
+  allCategories,
+  stops,
+  activities,
+}: {
+  itineraryId: string;
+  categories: CategoryOption[];
+  allCategories: CategoryOption[];
+  stops: StopOption[];
+  activities: SidebarActivity[];
+}) {
+  const categoryIds = new Set(categories.map((category) => category.id));
+  const uncategorized = listedActivities(
+    activities.filter(
+      (activity) => activity.categoryId === null || !categoryIds.has(activity.categoryId),
+    ),
+  );
+
+  if (categories.length === 0 && uncategorized.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className={styles.categoryList}>
+      {categories.map((category) => (
+        <CategoryItem
+          key={category.id}
+          itineraryId={itineraryId}
+          id={category.id}
+          name={category.name}
+          color={category.color}
+          categories={allCategories}
+          stops={stops}
+          activities={listedActivities(
+            activities.filter((activity) => activity.categoryId === category.id),
+          )}
+        />
+      ))}
+      {uncategorized.length > 0 ? (
+        <CategoryItem
+          key="uncategorized"
+          itineraryId={itineraryId}
+          id="uncategorized"
+          name="Uncategorized"
+          color="var(--surface)"
+          readOnly
+          categories={allCategories}
+          stops={stops}
+          activities={uncategorized}
+        />
+      ) : null}
+    </ul>
   );
 }
 
@@ -371,17 +236,11 @@ export default function ActivitySidebar({
   const [renameStop, setRenameStop] = useState<StopOption | null>(null);
   const [renameName, setRenameName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StopOption | null>(null);
-  const visible = activities.filter((activity) =>
-    selectedStopId === null ? activity.stopId === null : activity.stopId === selectedStopId,
-  );
-  const tabCategories = categories.filter((category) =>
-    selectedStopId === null ? category.stopId === null : category.stopId === selectedStopId,
-  );
-  const categoryIds = new Set(tabCategories.map((category) => category.id));
-  const uncategorized = listedActivities(
-    visible.filter(
-      (activity) => activity.categoryId === null || !categoryIds.has(activity.categoryId),
-    ),
+  const logisticsCategories = categories.filter((category) => category.stopId === null);
+  const logisticsActivities = activities.filter((activity) => activity.stopId === null);
+  const placeCategories = categories.filter((category) => category.stopId === selectedStopId);
+  const placeActivities = activities.filter(
+    (activity) => selectedStopId !== null && activity.stopId === selectedStopId,
   );
 
   useEffect(() => {
@@ -414,9 +273,42 @@ export default function ActivitySidebar({
   };
 
   return (
+    <div className={styles.column}>
+    <section className={`${styles.side} ${styles.logistics}`} aria-label="Logistics">
+      <header className={styles.activitiesHeader}>
+        <h2 className={styles.activitiesTitle}>Logistics</h2>
+        <ActivityAdd
+          itineraryId={itineraryId}
+          categories={categories}
+          stops={stops}
+          defaultStopId={null}
+        />
+      </header>
+      <CategoryList
+        itineraryId={itineraryId}
+        categories={logisticsCategories}
+        allCategories={categories}
+        stops={stops}
+        activities={logisticsActivities}
+      />
+    </section>
     <section className={`${styles.side} ${styles.activities}`} aria-label="Activities">
       <header className={styles.activitiesHeader}>
-        <h2 className={styles.activitiesTitle}>Activities</h2>
+        <div className={styles.activitiesHeading}>
+          <h2 className={styles.activitiesTitle}>Activities</h2>
+          {selectedStopId ? (
+            <PlaceSelect
+              stops={stops}
+              selectedStopId={selectedStopId}
+              onSelect={setSelectedStopId}
+              onRename={(stop) => {
+                setRenameName(stop.name);
+                setRenameStop(stop);
+              }}
+              onDelete={setDeleteTarget}
+            />
+          ) : null}
+        </div>
         <ActivityAdd
           itineraryId={itineraryId}
           categories={categories}
@@ -425,49 +317,13 @@ export default function ActivitySidebar({
           onNewPlace={openCreate}
         />
       </header>
-
-      <PlaceBar
+      <CategoryList
+        itineraryId={itineraryId}
+        categories={placeCategories}
+        allCategories={categories}
         stops={stops}
-        selectedStopId={selectedStopId}
-        onSelect={setSelectedStopId}
-        onRename={(stop) => {
-          setRenameName(stop.name);
-          setRenameStop(stop);
-        }}
-        onDelete={setDeleteTarget}
+        activities={placeActivities}
       />
-
-      {tabCategories.length > 0 || uncategorized.length > 0 ? (
-        <ul className={styles.categoryList}>
-          {tabCategories.map((category) => (
-            <CategoryItem
-              key={category.id}
-              itineraryId={itineraryId}
-              id={category.id}
-              name={category.name}
-              color={category.color}
-              categories={categories}
-              stops={stops}
-              activities={listedActivities(
-                visible.filter((activity) => activity.categoryId === category.id),
-              )}
-            />
-          ))}
-          {uncategorized.length > 0 ? (
-            <CategoryItem
-              key="uncategorized"
-              itineraryId={itineraryId}
-              id="uncategorized"
-              name="Uncategorized"
-              color="var(--surface)"
-              readOnly
-              categories={categories}
-              stops={stops}
-              activities={uncategorized}
-            />
-          ) : null}
-        </ul>
-      ) : null}
 
       <dialog
         ref={createRef}
@@ -616,5 +472,6 @@ export default function ActivitySidebar({
         </form>
       </dialog>
     </section>
+    </div>
   );
 }

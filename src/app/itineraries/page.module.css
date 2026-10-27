@@ -17,6 +17,12 @@
   gap: 16px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .title {
   color: var(--primary);
   font-size: 32px;
