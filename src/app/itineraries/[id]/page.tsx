@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
 import ActivitySidebar from "./ActivitySidebar";
@@ -143,7 +144,12 @@ export default async function ItineraryPage({
   return (
     <main className={`page ${styles.page}`}>
       <header className={styles.header}>
-        <h1 className={styles.title}>{itinerary.name}</h1>
+        <div className={styles.titleRow}>
+          <Link href="/itineraries" className={styles.back} aria-label="Back to itineraries">
+            <span className={styles.backIcon} aria-hidden="true" />
+          </Link>
+          <h1 className={styles.title}>{itinerary.name}</h1>
+        </div>
         <div className={styles.controls}>
           <ItineraryEdit
             itinerary={{

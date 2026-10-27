@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { SubmitEvent } from "react";
+import type { RefObject, SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { createStop, deleteStop, updateStop } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
@@ -74,10 +74,12 @@ function StopTab({
 
 function PlaceActions({
   name,
+  anchorRef,
   onRename,
   onDelete,
 }: {
   name: string;
+  anchorRef?: RefObject<HTMLElement | null>;
   onRename: () => void;
   onDelete: () => void;
 }) {
@@ -96,9 +98,10 @@ function PlaceActions({
       return;
     }
 
-    const rect = menu.getBoundingClientRect();
+    const anchor = anchorRef?.current;
+    const rect = (anchor ?? menu).getBoundingClientRect();
     dropdown.style.position = "fixed";
-    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.top = `${anchor ? rect.bottom : rect.bottom + 4}px`;
     dropdown.style.right = `${window.innerWidth - rect.right}px`;
     dropdown.style.left = "auto";
   };
@@ -220,16 +223,15 @@ function PlaceBar({
     };
 
     const placeList = () => {
-      const menu = menuRef.current;
+      const bar = barRef.current;
       const list = listRef.current;
 
-      if (!menu || !list) {
+      if (!bar || !list) {
         return;
       }
 
-      const rect = menu.getBoundingClientRect();
-      list.style.position = "fixed";
-      list.style.top = `${rect.bottom + 4}px`;
+      const rect = bar.getBoundingClientRect();
+      list.style.top = `${rect.bottom}px`;
       list.style.left = `${rect.left}px`;
       list.style.width = `${rect.width}px`;
     };
@@ -256,7 +258,9 @@ function PlaceBar({
       <div ref={measureRef} className={styles.stopsMeasure} aria-hidden="true">
         <span>Logistics</span>
         {stops.map((stop) => (
-          <span key={stop.id}>{stop.name}</span>
+          <span key={stop.id} className={styles.stopsMeasurePlace}>
+            {stop.name}
+          </span>
         ))}
       </div>
       <div
@@ -280,6 +284,7 @@ function PlaceBar({
             {selectedStop ? (
               <PlaceActions
                 name={selectedStop.name}
+                anchorRef={barRef}
                 onRename={() => onRename(selectedStop)}
                 onDelete={() => onDelete(selectedStop)}
               />
@@ -315,7 +320,11 @@ function PlaceBar({
           </div>
         ) : (
           <>
-            <div className={`${styles.stopTab} ${selectedStopId === null ? styles.stopTabSelected : ""}`}>
+            <div
+              className={`${styles.stopTab} ${
+                selectedStopId === null && stops.length > 0 ? styles.stopTabSelected : ""
+              }`}
+            >
               <button
                 className={styles.stop}
                 type="button"

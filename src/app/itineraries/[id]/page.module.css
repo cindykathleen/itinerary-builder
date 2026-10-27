@@ -21,7 +21,34 @@
   gap: 16px;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.back,
+.back:hover {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-primary);
+}
+
+.backIcon {
+  width: 12px;
+  height: 12px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(2px) rotate(45deg);
+}
+
 .title {
+  min-width: 0;
   color: var(--primary);
   font-size: 32px;
   font-weight: 400;
@@ -426,10 +453,15 @@
   padding: 8px;
   border: 1px solid transparent;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 400;
   line-height: normal;
   white-space: nowrap;
+}
+
+.stopsMeasure > .stopsMeasurePlace {
+  padding-right: 30px;
+  padding-left: 30px;
 }
 
 .stops {
@@ -458,13 +490,13 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 8px 34px 8px 12px;
   border: 1px solid transparent;
   border-radius: 8px;
   background-color: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 400;
   text-align: left;
 }
@@ -477,21 +509,33 @@
   white-space: nowrap;
 }
 
+.placeMenu:has(.stopMenu) .placeMenuTrigger,
+.placeMenu:has(.stopMenu) .placeMenuTrigger:hover {
+  padding-right: 66px;
+}
+
 .placeMenuChevron {
+  position: absolute;
+  top: 50%;
+  right: 16px;
   width: 8px;
   height: 8px;
   flex-shrink: 0;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: translateY(-2px) rotate(45deg);
+  transform: translateY(calc(-50% - 2px)) rotate(45deg);
 }
 
 .placeMenu .stopMenu,
 .placeMenu:hover .stopMenu,
 .placeMenu:focus-within .stopMenu,
 .placeMenu .stopMenu[open] {
-  position: static;
-  width: auto;
+  position: absolute;
+  top: 0;
+  right: 34px;
+  bottom: 0;
+  width: 24px;
+  margin: 0;
   overflow: visible;
   pointer-events: auto;
 }
@@ -500,14 +544,20 @@
 .placeMenu .stopMenuTrigger:hover,
 .placeMenu:hover .stopMenuTrigger,
 .placeMenu:focus-within .stopMenuTrigger,
-.placeMenu .stopMenu[open] .stopMenuTrigger {
+.placeMenu .stopMenu[open] .stopMenuTrigger,
+.placeMenu .stopMenu[open] .stopMenuTrigger:hover {
   width: 24px;
   height: 24px;
-  margin-right: 8px;
+  margin: 0;
   opacity: 1;
 }
 
+.placeMenu .stopMenuDropdown {
+  position: fixed;
+}
+
 .placeMenuList {
+  position: fixed;
   z-index: 4;
   max-height: 280px;
   margin: 0;
@@ -530,7 +580,7 @@
   background-color: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 400;
   text-align: left;
   text-overflow: ellipsis;
@@ -571,7 +621,7 @@
   background-color: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 400;
   text-align: center;
   text-overflow: ellipsis;
