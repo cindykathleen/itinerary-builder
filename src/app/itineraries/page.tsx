@@ -2,6 +2,7 @@ import { executeGraphQL } from "@/lib/graphql/execute";
 import ItinerariesGrid from "./ItinerariesGrid";
 import ItinerariesSidebar, { type ItineraryListStatus } from "./ItinerariesSidebar";
 import ItineraryCreate from "./ItineraryCreate";
+import SignOutButton from "./SignOutButton";
 import styles from "./page.module.css";
 
 const itinerariesQuery = /* GraphQL */ `
@@ -48,7 +49,10 @@ export default async function ItinerariesPage({
     <main className={`page ${styles.page}`}>
       <header className={styles.header}>
         <h1 className={styles.title}>My Itineraries</h1>
-        <ItineraryCreate variant="primary" idPrefix="header-create" />
+        <div className={styles.headerActions}>
+          <ItineraryCreate variant="primary" idPrefix="header-create" />
+          <SignOutButton />
+        </div>
       </header>
 
       <ItinerariesSidebar currentStatus={status} />

@@ -30,8 +30,7 @@ export default function ItineraryCreate({
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const dateRangeError = isEndDateBeforeStart(dateStart, dateEnd);
-  const fieldsFilled =
-    name.trim() !== "" && dateStart !== "" && dateEnd !== "";
+  const fieldsFilled = name.trim() !== "" && dateStart !== "" && dateEnd !== "";
   const canSubmit = fieldsFilled && !dateRangeError;
 
   const setDateRangeValidity = (start: string, end: string) => {

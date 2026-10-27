@@ -1,0 +1,2 @@
+ALTER TABLE activities
+  ADD COLUMN in_sidebar BOOLEAN NOT NULL DEFAULT true;

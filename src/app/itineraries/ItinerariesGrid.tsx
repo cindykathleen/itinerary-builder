@@ -16,7 +16,11 @@ export default function ItinerariesGrid({
   status: ItineraryListStatus;
 }) {
   if (itineraries.length === 0) {
-    return <p className={styles.empty}>{emptyMessages[status]}</p>;
+    return (
+      <div className={styles.empty}>
+        <h2>{emptyMessages[status]}</h2>
+      </div>
+    );
   }
 
   return (

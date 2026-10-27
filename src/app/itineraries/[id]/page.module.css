@@ -1,0 +1,687 @@
+.page {
+  flex: 1 1 auto;
+  align-self: stretch;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 20px;
+  row-gap: 24px;
+  padding: 32px 40px 40px;
+  overflow: hidden;
+}
+
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.back,
+.back:hover {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-primary);
+}
+
+.backIcon {
+  width: 12px;
+  height: 12px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(2px) rotate(45deg);
+}
+
+.title {
+  min-width: 0;
+  color: var(--primary);
+  font-size: 32px;
+  font-weight: 400;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.edit,
+.edit:hover {
+  padding: 8px 0;
+  border: 1px solid transparent;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.edit:hover {
+  color: var(--primary-hover);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background-color: var(--surface);
+}
+
+.nav button,
+.nav button:hover {
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.nav button[aria-pressed="true"],
+.nav button[aria-pressed="true"]:hover {
+  color: #ffffff;
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.side {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 16px;
+  background-color: var(--foreground);
+}
+
+.page:has(.activities) {
+  grid-template-columns: minmax(280px, 480px) minmax(0, 1fr);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.logistics {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.activities {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.categoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 16px 16px 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.categoryGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+}
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.activityBody {
+  min-width: 0;
+  flex: 1;
+  cursor: grab;
+}
+
+.activityBody:active {
+  cursor: grabbing;
+}
+
+.activity h4 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityMenu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.activityMenu[open] {
+  z-index: 2;
+}
+
+.activityMenuTrigger,
+.activityMenuTrigger:hover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.activity:hover .activityMenuTrigger,
+.activity:focus-within .activityMenuTrigger,
+.activityMenuTrigger:focus-visible,
+.activityMenu[open] .activityMenuTrigger {
+  opacity: 1;
+}
+
+.activityMenuTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.activityMenuTrigger::marker {
+  content: "";
+}
+
+.activityMenu:not([open]) .activityMenuDropdown {
+  display: none;
+}
+
+.activityMenuDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 2;
+  min-width: 180px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.activityMenuAction,
+.activityMenuAction:hover {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.activityMenuAction:hover {
+  background-color: var(--background);
+}
+
+.activity p {
+  color: var(--text-secondary);
+  white-space: normal;
+}
+
+.activityScheduled .activityBody {
+  opacity: 0.4;
+}
+
+.category h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categoryMenu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.categoryMenu[open] {
+  z-index: 2;
+}
+
+.categoryMenuTrigger,
+.categoryMenuTrigger:hover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.category:hover .categoryMenuTrigger,
+.category:focus-within .categoryMenuTrigger,
+.categoryMenuTrigger:focus-visible,
+.categoryMenu[open] .categoryMenuTrigger {
+  opacity: 1;
+}
+
+.categoryMenuTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.categoryMenuTrigger::marker {
+  content: "";
+}
+
+.categoryMenu:not([open]) .categoryMenuDropdown {
+  display: none;
+}
+
+.categoryMenuDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 2;
+  min-width: 180px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.categoryMenuAction,
+.categoryMenuAction:hover {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.categoryMenuAction:hover {
+  background-color: var(--background);
+}
+
+.activitiesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px;
+}
+
+.activitiesHeading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.activitiesTitle {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.addMenu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.addMenu[open] {
+  z-index: 5;
+}
+
+.add,
+.add:hover {
+  padding: 0;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+}
+
+.add::-webkit-details-marker {
+  display: none;
+}
+
+.add::marker {
+  content: "";
+}
+
+.addMenu:not([open]) .addDropdown {
+  display: none;
+}
+
+.addDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 2;
+  min-width: 180px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.addAction,
+.addAction:hover {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.addAction:hover {
+  background-color: var(--background);
+}
+
+.placeSelect {
+  position: relative;
+  min-width: 0;
+}
+
+.placeSelect[open] {
+  z-index: 4;
+}
+
+.placeTrigger,
+.placeTrigger:hover {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 220px;
+  padding: 4px 10px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+  list-style: none;
+  cursor: pointer;
+}
+
+.placeTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.placeTrigger::marker {
+  content: "";
+}
+
+.placeTriggerLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeChevron {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.placeSelect[open] .placeChevron {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.placeSelect:not([open]) .placeList {
+  display: none;
+}
+
+.placeList {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 4;
+  width: max-content;
+  min-width: 220px;
+  max-width: 280px;
+  max-height: 240px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.placeOptionRow {
+  position: relative;
+}
+
+.placeOption,
+.placeOption:hover {
+  width: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeOption:hover {
+  background-color: var(--background);
+}
+
+.placeOption[aria-selected="true"],
+.placeOption[aria-selected="true"]:hover {
+  background-color: color-mix(in srgb, var(--secondary) 45%, #ffffff);
+}
+
+.placeOptionRow .placeOption,
+.placeOptionRow .placeOption:hover {
+  padding-right: 40px;
+}
+
+.stopMenu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.placeOptionRow:hover .stopMenu,
+.placeOptionRow:focus-within .stopMenu,
+.stopMenu[open] {
+  width: auto;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.stopMenuTrigger,
+.stopMenuTrigger:hover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 24px;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.placeOptionRow:hover .stopMenuTrigger,
+.placeOptionRow:focus-within .stopMenuTrigger,
+.stopMenuTrigger:focus-visible,
+.stopMenu[open] .stopMenuTrigger,
+.placeOptionRow:hover .stopMenuTrigger:hover,
+.placeOptionRow:focus-within .stopMenuTrigger:hover,
+.stopMenu[open] .stopMenuTrigger:hover {
+  width: 24px;
+  margin-right: 4px;
+  opacity: 1;
+}
+
+.stopMenuTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.stopMenuTrigger::marker {
+  content: "";
+}
+
+.stopMenu:not([open]) .stopMenuDropdown {
+  display: none;
+}
+
+.stopMenuDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 3;
+  min-width: 140px;
+  padding: 8px 0;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.stopMenuAction,
+.stopMenuAction:hover {
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.stopMenuAction:hover {
+  background-color: var(--background);
+}
+
+@media (max-width: 800px) {
+  .page,
+  .page:has(.activities) {
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    padding: 16px;
+    overflow: visible;
+  }
+
+  .header {
+    grid-column: 1;
+  }
+}
