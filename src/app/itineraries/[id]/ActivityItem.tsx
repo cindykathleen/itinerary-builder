@@ -8,8 +8,19 @@ import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
 import { useActivityHighlight } from "./ActivityHighlight";
 import CategorySelect, { categoriesForStop, type CategoryOption } from "./CategorySelect";
+import GooglePlaceField from "./GooglePlaceField";
 import StopSelect, { type StopOption } from "./StopSelect";
 import styles from "./page.module.css";
+
+function googleMapsHref(placeId: string, name: string | null) {
+  const params = new URLSearchParams({
+    api: "1",
+    query: name?.trim() || "Google Maps",
+    query_place_id: placeId,
+  });
+
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}
 
 function SaveButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
@@ -26,6 +37,9 @@ export default function ActivityItem({
   id,
   name: activityName,
   note: activityNote,
+  googlePlaceId,
+  googlePlaceName,
+  googlePlaceAddress,
   categoryId: activityCategoryId,
   stopId: activityStopId,
   scheduled,
@@ -36,6 +50,9 @@ export default function ActivityItem({
   id: string;
   name: string;
   note: string | null;
+  googlePlaceId: string | null;
+  googlePlaceName: string | null;
+  googlePlaceAddress: string | null;
   categoryId: string | null;
   stopId: string | null;
   scheduled: boolean;
@@ -50,6 +67,7 @@ export default function ActivityItem({
   const [note, setNote] = useState(activityNote ?? "");
   const [categoryId, setCategoryId] = useState(activityCategoryId ?? "");
   const [stopId, setStopId] = useState(activityStopId ?? "");
+  const [placeEditorKey, setPlaceEditorKey] = useState(0);
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
   const highlight = useActivityHighlight();
@@ -82,6 +100,7 @@ export default function ActivityItem({
     setNote(activityNote ?? "");
     setCategoryId(activityCategoryId ?? "");
     setStopId(activityStopId ?? "");
+    setPlaceEditorKey((key) => key + 1);
   };
 
   const closeMenu = () => {
@@ -148,11 +167,30 @@ export default function ActivityItem({
         className={styles.activityBody}
         draggable
         onDragStart={(event) => {
+          if (event.target instanceof Element && event.target.closest("a")) {
+            event.preventDefault();
+            return;
+          }
+
           event.dataTransfer.setData("text/plain", id);
           event.dataTransfer.effectAllowed = "move";
         }}
       >
-        <h4>{activityName}</h4>
+        <div className={styles.activityTitle}>
+          <h4>{activityName}</h4>
+          {googlePlaceId ? (
+            <span className={styles.googlePlace}>
+              (<a
+                href={googleMapsHref(googlePlaceId, googlePlaceName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                draggable={false}
+              >
+                Google Map
+              </a>)
+            </span>
+          ) : null}
+        </div>
         {activityNote ? <p>{activityNote}</p> : null}
       </div>
       <details ref={menuRef} className={styles.activityMenu} onToggle={placeDropdown}>
@@ -214,9 +252,22 @@ export default function ActivityItem({
               />
             </div>
 
-            <div className={dialogStyles.field}>
-              <label htmlFor={noteId}>Note</label>
-              <textarea
+          <GooglePlaceField
+            key={`${googlePlaceId ?? ""}-${placeEditorKey}`}
+            place={
+              googlePlaceId && googlePlaceName
+                ? {
+                    placeId: googlePlaceId,
+                    name: googlePlaceName,
+                    address: googlePlaceAddress ?? "",
+                  }
+                : null
+            }
+          />
+
+          <div className={dialogStyles.field}>
+            <label htmlFor={noteId}>Note</label>
+            <textarea
                 id={noteId}
                 name="note"
                 value={note}

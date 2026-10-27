@@ -309,6 +309,8 @@ const createActivityMutation = /* GraphQL */ `
     $note: String!
     $categoryId: ID
     $stopId: ID
+    $googlePlaceId: String
+    $sessionToken: String
     $inSidebar: Boolean
     $date: String
     $startTime: String
@@ -320,6 +322,8 @@ const createActivityMutation = /* GraphQL */ `
       note: $note
       categoryId: $categoryId
       stopId: $stopId
+      googlePlaceId: $googlePlaceId
+      sessionToken: $sessionToken
       inSidebar: $inSidebar
       date: $date
       startTime: $startTime
@@ -340,6 +344,8 @@ export async function createActivity(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
   const stopId = String(formData.get("stopId") ?? "").trim();
+  const googlePlaceId = String(formData.get("googlePlaceId") ?? "").trim();
+  const sessionToken = String(formData.get("sessionToken") ?? "").trim();
   const date = String(formData.get("date") ?? "").trim();
   const startTime = String(formData.get("startTime") ?? "").trim();
   const endTime = String(formData.get("endTime") ?? "").trim();
@@ -351,6 +357,8 @@ export async function createActivity(formData: FormData) {
     note,
     categoryId: categoryId || null,
     stopId: stopId || null,
+    googlePlaceId: googlePlaceId || null,
+    sessionToken: sessionToken || null,
     inSidebar,
     date: date || null,
     startTime: startTime || null,
@@ -360,8 +368,24 @@ export async function createActivity(formData: FormData) {
 }
 
 const updateActivityMutation = /* GraphQL */ `
-  mutation UpdateActivity($id: ID!, $name: String!, $note: String!, $categoryId: ID, $stopId: ID) {
-    updateActivity(id: $id, name: $name, note: $note, categoryId: $categoryId, stopId: $stopId) {
+  mutation UpdateActivity(
+    $id: ID!
+    $name: String!
+    $note: String!
+    $categoryId: ID
+    $stopId: ID
+    $googlePlaceId: String
+    $sessionToken: String
+  ) {
+    updateActivity(
+      id: $id
+      name: $name
+      note: $note
+      categoryId: $categoryId
+      stopId: $stopId
+      googlePlaceId: $googlePlaceId
+      sessionToken: $sessionToken
+    ) {
       id
       name
       note
@@ -378,6 +402,8 @@ export async function updateActivity(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "").trim();
   const stopId = String(formData.get("stopId") ?? "").trim();
+  const googlePlaceId = String(formData.get("googlePlaceId") ?? "").trim();
+  const sessionToken = String(formData.get("sessionToken") ?? "").trim();
 
   await executeGraphQL(updateActivityMutation, {
     id,
@@ -385,6 +411,8 @@ export async function updateActivity(formData: FormData) {
     note,
     categoryId: categoryId || null,
     stopId: stopId || null,
+    googlePlaceId: googlePlaceId || null,
+    sessionToken: sessionToken || null,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }

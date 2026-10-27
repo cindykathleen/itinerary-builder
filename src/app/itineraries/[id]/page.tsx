@@ -42,6 +42,9 @@ const itineraryQuery = /* GraphQL */ `
         note
         categoryId
         stopId
+        googlePlaceId
+        googlePlaceName
+        googlePlaceAddress
         inSidebar
         startDate
         startTime
@@ -83,6 +86,9 @@ type ItineraryQuery = {
       note: string | null;
       categoryId: string | null;
       stopId: string | null;
+      googlePlaceId: string | null;
+      googlePlaceName: string | null;
+      googlePlaceAddress: string | null;
       inSidebar: boolean;
       startDate: string | null;
       startTime: string | null;
@@ -137,6 +143,9 @@ export default async function ItineraryPage({
       note: activity.note,
       categoryId: activity.categoryId,
       stopId: activity.stopId,
+      googlePlaceId: activity.googlePlaceId,
+      googlePlaceName: activity.googlePlaceName,
+      googlePlaceAddress: activity.googlePlaceAddress,
       startDate: activity.startDate,
     }));
 

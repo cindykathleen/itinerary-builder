@@ -18,6 +18,9 @@ type SidebarActivity = {
   note: string | null;
   categoryId: string | null;
   stopId: string | null;
+  googlePlaceId: string | null;
+  googlePlaceName: string | null;
+  googlePlaceAddress: string | null;
   startDate: string | null;
 };
 
@@ -40,6 +43,9 @@ function listedActivities(activities: SidebarActivity[]) {
       note: activity.note,
       scheduled: activity.startDate !== null,
       stopId: activity.stopId,
+      googlePlaceId: activity.googlePlaceId,
+      googlePlaceName: activity.googlePlaceName,
+      googlePlaceAddress: activity.googlePlaceAddress,
     }));
 }
 

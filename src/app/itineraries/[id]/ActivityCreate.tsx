@@ -8,6 +8,7 @@ import { createActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
 import CategorySelect, { categoriesForStop, type CategoryOption } from "./CategorySelect";
+import GooglePlaceField from "./GooglePlaceField";
 import StopSelect, { type StopOption } from "./StopSelect";
 
 function CreateButton({ disabled }: { disabled: boolean }) {
@@ -159,6 +160,8 @@ export default function ActivityCreate({
               required
             />
           </div>
+
+          <GooglePlaceField />
 
           <div className={dialogStyles.field}>
             <label htmlFor={noteId}>Note</label>

@@ -185,7 +185,15 @@
   cursor: grabbing;
 }
 
+.activityTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
 .activity h4 {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -274,6 +282,25 @@
 .activity p {
   color: var(--text-secondary);
   white-space: normal;
+}
+
+.googlePlace {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.googlePlace a,
+.googlePlace a:hover {
+  position: relative;
+  z-index: 1;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.googlePlace a:hover {
+  color: var(--primary-hover);
 }
 
 .activityScheduled .activityBody {
