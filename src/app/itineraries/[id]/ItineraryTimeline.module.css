@@ -135,10 +135,16 @@
   line-height: 20px;
   user-select: none;
   touch-action: none;
+  transition: box-shadow 0.12s ease;
 }
 
-.blockMoving {
+.blockMoving,
+.blockHighlighted {
   z-index: 2;
+}
+
+.blockHighlighted {
+  box-shadow: 0 0 0 2px var(--primary);
 }
 
 .block:active {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import { ActivityHighlightProvider } from "./ActivityHighlight";
 import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
@@ -167,6 +168,7 @@ export default async function ItineraryPage({
         </div>
       </header>
 
+      <ActivityHighlightProvider>
       {view === "activities" ? (
         <ActivitySidebar
           itineraryId={itinerary.id}
@@ -208,6 +210,7 @@ export default async function ItineraryPage({
       ) : (
         <ItineraryScheduleSetup itineraryId={itinerary.id} />
       )}
+      </ActivityHighlightProvider>
     </main>
   );
 }

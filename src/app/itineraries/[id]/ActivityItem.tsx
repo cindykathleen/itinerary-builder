@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 import { deleteActivity, updateActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import { useActivityHighlight } from "./ActivityHighlight";
 import CategorySelect, { categoriesForStop, type CategoryOption } from "./CategorySelect";
 import StopSelect, { type StopOption } from "./StopSelect";
 import styles from "./page.module.css";
@@ -51,6 +52,7 @@ export default function ActivityItem({
   const [stopId, setStopId] = useState(activityStopId ?? "");
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
+  const highlight = useActivityHighlight();
 
   const chooseStop = (nextStopId: string) => {
     setStopId(nextStopId);
@@ -137,7 +139,11 @@ export default function ActivityItem({
   };
 
   return (
-    <li className={scheduled ? `${styles.activity} ${styles.activityScheduled}` : styles.activity}>
+    <li
+      className={scheduled ? `${styles.activity} ${styles.activityScheduled}` : styles.activity}
+      onMouseEnter={() => highlight?.setHoveredId(id)}
+      onMouseLeave={() => highlight?.setHoveredId(null)}
+    >
       <div
         className={styles.activityBody}
         draggable

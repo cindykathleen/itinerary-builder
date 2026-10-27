@@ -179,8 +179,13 @@
   color: #e53e3e;
 }
 
-.when {
+.when,
+.note {
   color: var(--text-secondary);
+}
+
+.note {
+  font-size: 14px;
 }
 
 .actions {
@@ -274,4 +279,75 @@
   flex-shrink: 0;
   border: 1px solid rgba(26, 32, 44, 0.12);
   border-radius: 50%;
+}
+
+.places {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px;
+  border-radius: 8px;
+  background-color: var(--background);
+  cursor: text;
+}
+
+.placePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 2px 0 10px;
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--primary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.placeName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeRemove,
+.placeRemove:hover {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 24px;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.placeRemoveIcon {
+  display: block;
+  line-height: 1;
+  transform: translateY(1px);
+}
+
+.placeRemove:hover {
+  color: var(--text-primary);
+}
+
+.dialog .places input {
+  width: auto;
+  flex: 1 1 140px;
+  min-width: 140px;
+  padding: 4px 8px;
+  background-color: transparent;
 }

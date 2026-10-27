@@ -89,12 +89,14 @@ const saveItineraryScheduleMutation = /* GraphQL */ `
     $dayStart: String!
     $dayEnd: String!
     $timeInterval: Int!
+    $places: [String!]!
   ) {
     saveItinerarySchedule(
       id: $id
       dayStart: $dayStart
       dayEnd: $dayEnd
       timeInterval: $timeInterval
+      places: $places
     ) {
       id
       scheduleConfigured
@@ -107,12 +109,17 @@ export async function saveItinerarySchedule(formData: FormData) {
   const dayStart = String(formData.get("dayStart") ?? "");
   const dayEnd = String(formData.get("dayEnd") ?? "");
   const timeInterval = Number(formData.get("timeInterval"));
+  const places = [
+    ...formData.getAll("places").map((value) => String(value)),
+    String(formData.get("placeDraft") ?? ""),
+  ];
 
   await executeGraphQL(saveItineraryScheduleMutation, {
     id,
     dayStart,
     dayEnd,
     timeInterval,
+    places,
   });
   revalidatePath(`/itineraries/${id}`);
 }

@@ -50,10 +50,14 @@ export default function ActivityCreate({
   const noteId = useId();
   const categoryFieldId = useId();
   const stopFieldId = useId();
+  const sidebarFieldId = useId();
+  const fromTimeline = slot !== null;
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [stopId, setStopId] = useState(defaultStopId ?? "");
+  const [addToSidebar, setAddToSidebar] = useState(false);
+  const showPlaceFields = !fromTimeline || addToSidebar;
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
 
@@ -86,6 +90,7 @@ export default function ActivityCreate({
     setNote("");
     setCategoryId("");
     setStopId(defaultStopId ?? "");
+    setAddToSidebar(false);
     onDismiss?.();
   };
 
@@ -165,25 +170,44 @@ export default function ActivityCreate({
             />
           </div>
 
-          <div className={dialogStyles.field}>
-            <label htmlFor={stopFieldId}>Place</label>
-            <StopSelect
-              id={stopFieldId}
-              stops={stops}
-              value={stopId}
-              onChange={chooseStop}
-            />
-          </div>
+          {fromTimeline ? (
+            <>
+              <input type="hidden" name="inSidebar" value={addToSidebar ? "true" : "false"} />
+              <label className={dialogStyles.choice} htmlFor={sidebarFieldId}>
+                <input
+                  id={sidebarFieldId}
+                  type="checkbox"
+                  checked={addToSidebar}
+                  onChange={(event) => setAddToSidebar(event.target.checked)}
+                />
+                Add to activities sidebar
+              </label>
+            </>
+          ) : null}
 
-          <div className={dialogStyles.field}>
-            <label htmlFor={categoryFieldId}>Category</label>
-            <CategorySelect
-              id={categoryFieldId}
-              categories={placeCategories}
-              value={categoryId}
-              onChange={setCategoryId}
-            />
-          </div>
+          {showPlaceFields ? (
+            <>
+              <div className={dialogStyles.field}>
+                <label htmlFor={stopFieldId}>Place</label>
+                <StopSelect
+                  id={stopFieldId}
+                  stops={stops}
+                  value={stopId}
+                  onChange={chooseStop}
+                />
+              </div>
+
+              <div className={dialogStyles.field}>
+                <label htmlFor={categoryFieldId}>Category</label>
+                <CategorySelect
+                  id={categoryFieldId}
+                  categories={placeCategories}
+                  value={categoryId}
+                  onChange={setCategoryId}
+                />
+              </div>
+            </>
+          ) : null}
         </div>
 
         <div className={dialogStyles.actions}>

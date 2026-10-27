@@ -5,6 +5,7 @@ import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
 import { deleteActivity, scheduleActivity, unscheduleActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import { useActivityHighlight } from "./ActivityHighlight";
 import ActivityCreate, { type ActivitySlot } from "./ActivityCreate";
 import { categoryTextColor } from "./CategoryItem";
 import type { CategoryOption } from "./CategorySelect";
@@ -277,10 +278,53 @@ export default function ItineraryTimeline({
   const [pendingRemove, setPendingRemove] = useState<TimelineActivity | null>(null);
   const [pendingCreate, setPendingCreate] = useState<ActivitySlot | null>(null);
   const [draft, setDraft] = useState<{ date: string; startIndex: number; endIndex: number } | null>(null);
+  const highlight = useActivityHighlight();
+  const hoveredId = highlight?.hoveredId ?? null;
 
   useEffect(() => {
     setItems(activities);
   }, [activities]);
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+
+    if (!timeline || !hoveredId) {
+      return;
+    }
+
+    const block = timeline.querySelector<HTMLElement>(
+      `[data-activity-id="${CSS.escape(hoveredId)}"]`,
+    );
+
+    if (!block) {
+      return;
+    }
+
+    const corner = timeline.querySelector<HTMLElement>(`.${CSS.escape(styles.corner)}`);
+    const timelineRect = timeline.getBoundingClientRect();
+    const blockRect = block.getBoundingClientRect();
+    const cornerRect = corner?.getBoundingClientRect();
+    const viewTop = timelineRect.top + (cornerRect?.height ?? 0);
+    const viewLeft = timelineRect.left + (cornerRect?.width ?? 0);
+    let top = 0;
+    let left = 0;
+
+    if (blockRect.top < viewTop) {
+      top = blockRect.top - viewTop;
+    } else if (blockRect.bottom > timelineRect.bottom) {
+      top = blockRect.bottom - timelineRect.bottom;
+    }
+
+    if (blockRect.left < viewLeft) {
+      left = blockRect.left - viewLeft;
+    } else if (blockRect.right > timelineRect.right) {
+      left = blockRect.right - timelineRect.right;
+    }
+
+    if (top !== 0 || left !== 0) {
+      timeline.scrollBy({ top, left });
+    }
+  }, [hoveredId]);
 
   useEffect(() => {
     const rememberDrag = (event: DragEvent) => {
@@ -919,7 +963,14 @@ export default function ItineraryTimeline({
           return (
             <div
               key={activity.id}
-              className={movePreview?.id === activity.id ? `${styles.block} ${styles.blockMoving}` : styles.block}
+              data-activity-id={activity.id}
+              className={[
+                styles.block,
+                movePreview?.id === activity.id ? styles.blockMoving : "",
+                hoveredId === activity.id ? styles.blockHighlighted : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               aria-label={activity.name}
               style={{
                 gridColumn: column + 2,

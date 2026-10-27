@@ -238,15 +238,19 @@ export default function ActivitySidebar({
   const [deleteTarget, setDeleteTarget] = useState<StopOption | null>(null);
   const logisticsCategories = categories.filter((category) => category.stopId === null);
   const logisticsActivities = activities.filter((activity) => activity.stopId === null);
-  const placeCategories = categories.filter((category) => category.stopId === selectedStopId);
+  const placeCategories = categories.filter(
+    (category) => selectedStopId !== null && category.stopId === selectedStopId,
+  );
   const placeActivities = activities.filter(
     (activity) => selectedStopId !== null && activity.stopId === selectedStopId,
   );
 
   useEffect(() => {
-    if (selectedStopId && !stops.some((stop) => stop.id === selectedStopId)) {
-      setSelectedStopId(stops[0]?.id ?? null);
+    if (stops.some((stop) => stop.id === selectedStopId)) {
+      return;
     }
+
+    setSelectedStopId(stops[0]?.id ?? null);
   }, [selectedStopId, stops]);
 
   useEffect(() => {

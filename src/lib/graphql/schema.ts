@@ -79,6 +79,38 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 const DEFAULT_CATEGORY_COLOR = "#E0E6ED"; // --surface
 
+function placeNames(values: string[]) {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    for (const part of value.split(",")) {
+      const name = part.trim();
+
+      if (!name) {
+        continue;
+      }
+
+      if (name.length > 255) {
+        throw new GraphQLError("Place name must be 255 characters or fewer.", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+
+      const key = name.toLocaleLowerCase();
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      names.push(name);
+    }
+  }
+
+  return names;
+}
+
 function parseIsoDate(value: string) {
   if (!DATE_PATTERN.test(value)) {
     return null;
@@ -253,6 +285,7 @@ export const schema = createSchema({
         dayStart: String!
         dayEnd: String!
         timeInterval: Int!
+        places: [String!]!
       ): Itinerary!
       saveItineraryDayHeading(id: ID!, date: String!, heading: String!): Boolean!
       updateItinerary(
@@ -602,6 +635,7 @@ export const schema = createSchema({
           dayStart: string;
           dayEnd: string;
           timeInterval: number;
+          places: string[];
         },
         context: GraphQLContext,
       ) => {
@@ -614,6 +648,7 @@ export const schema = createSchema({
         const dayStart = parseTime(args.dayStart);
         const dayEnd = parseTime(args.dayEnd);
         const timeInterval = args.timeInterval;
+        const places = placeNames(args.places);
 
         if (!dayStart || !dayEnd) {
           throw new GraphQLError("A valid day start and day end are required.", {
@@ -633,26 +668,63 @@ export const schema = createSchema({
           });
         }
 
-        const result = await pool.query<ItineraryRow>(
-          `UPDATE itineraries
-           SET day_start = $1::time,
-               day_end = $2::time,
-               time_interval = $3,
-               schedule_configured = true,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $4 AND owner_id = $5
-           RETURNING ${itineraryColumns}`,
-          [dayStart, dayEnd, timeInterval, args.id, context.userId],
-        );
-        const itinerary = result.rows[0];
-
-        if (!itinerary) {
-          throw new GraphQLError("Itinerary not found.", {
-            extensions: { code: "NOT_FOUND" },
+        if (places.length === 0) {
+          throw new GraphQLError("A place is required.", {
+            extensions: { code: "BAD_USER_INPUT" },
           });
         }
 
-        return toItinerary(itinerary);
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+          const result = await client.query<ItineraryRow>(
+            `UPDATE itineraries
+             SET day_start = $1::time,
+                 day_end = $2::time,
+                 time_interval = $3,
+                 schedule_configured = true,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $4 AND owner_id = $5
+             RETURNING ${itineraryColumns}`,
+            [dayStart, dayEnd, timeInterval, args.id, context.userId],
+          );
+          const itinerary = result.rows[0];
+
+          if (!itinerary) {
+            throw new GraphQLError("Itinerary not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          for (const name of places) {
+            const stop = await client.query<{ id: string }>(
+              `INSERT INTO stops (itinerary_id, name, position)
+               SELECT $1, $2, COALESCE(MAX(position) + 1, 0)
+               FROM stops
+               WHERE itinerary_id = $1
+               RETURNING id`,
+              [args.id, name],
+            );
+            await client.query(
+              `INSERT INTO categories (itinerary_id, name, color, logistics, stop_id, created_at)
+               VALUES
+                 ($1, 'Restaurants', '#FFE5F2', false, $2, clock_timestamp()),
+                 ($1, 'Bars', '#F4D0E1', false, $2, clock_timestamp() + interval '1 millisecond'),
+                 ($1, 'Coffee', '#E9E0D8', false, $2, clock_timestamp() + interval '2 milliseconds'),
+                 ($1, 'Activities', '#D6E5F5', false, $2, clock_timestamp() + interval '3 milliseconds')`,
+              [args.id, stop.rows[0].id],
+            );
+          }
+
+          await client.query("COMMIT");
+          return toItinerary(itinerary);
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
       },
       saveItineraryDayHeading: async (
         _parent,
