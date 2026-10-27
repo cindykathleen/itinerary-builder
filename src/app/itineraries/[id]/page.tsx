@@ -14,7 +14,6 @@ const itineraryQuery = /* GraphQL */ `
     itinerary(id: $id) {
       id
       name
-      destination
       dateStart
       dateEnd
       dayStart
@@ -56,7 +55,6 @@ type ItineraryQuery = {
   itinerary: {
     id: string;
     name: string;
-    destination: string;
     dateStart: string;
     dateEnd: string;
     dayStart: string;
@@ -156,7 +154,6 @@ export default async function ItineraryPage({
             itinerary={{
               id: itinerary.id,
               name: itinerary.name,
-              destination: itinerary.destination,
               dateStart: itinerary.dateStart,
               dateEnd: itinerary.dateEnd,
               dayStart: itinerary.dayStart,

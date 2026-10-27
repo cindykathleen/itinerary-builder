@@ -4,7 +4,6 @@ CREATE TABLE itineraries (
   owner_id UUID NOT NULL,
 
   name VARCHAR(255) NOT NULL,
-  destination VARCHAR(255) NOT NULL,
 
   date_start DATE NOT NULL,
   date_end DATE NOT NULL,

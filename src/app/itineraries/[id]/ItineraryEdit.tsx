@@ -32,7 +32,6 @@ export default function ItineraryEdit({
   itinerary: {
     id: string;
     name: string;
-    destination: string;
     dateStart: string;
     dateEnd: string;
     dayStart: string;
@@ -44,7 +43,6 @@ export default function ItineraryEdit({
   const endDateRef = useRef<HTMLInputElement>(null);
   const endTimeRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(itinerary.name);
-  const [destination, setDestination] = useState(itinerary.destination);
   const [dateStart, setDateStart] = useState(itinerary.dateStart);
   const [dateEnd, setDateEnd] = useState(itinerary.dateEnd);
   const [dayStart, setDayStart] = useState(itinerary.dayStart);
@@ -63,7 +61,6 @@ export default function ItineraryEdit({
 
   const openDialog = () => {
     setName(itinerary.name);
-    setDestination(itinerary.destination);
     setDateStart(itinerary.dateStart);
     setDateEnd(itinerary.dateEnd);
     setDayStart(itinerary.dayStart);
@@ -150,18 +147,6 @@ export default function ItineraryEdit({
                 onChange={(event) => setName(event.target.value)}
                 maxLength={255}
                 required
-              />
-            </div>
-
-            <div className={dialogStyles.field}>
-              <label htmlFor="edit-destination">Destination</label>
-              <input
-                id="edit-destination"
-                name="destination"
-                type="text"
-                value={destination}
-                onChange={(event) => setDestination(event.target.value)}
-                maxLength={255}
               />
             </div>
 

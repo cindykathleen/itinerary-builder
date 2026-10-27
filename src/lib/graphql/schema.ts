@@ -6,7 +6,6 @@ import type { GraphQLContext } from "./context";
 type ItineraryRow = {
   id: string;
   name: string;
-  destination: string;
   date_start: string;
   date_end: string;
   day_start: string;
@@ -36,7 +35,6 @@ function toItinerary(row: ItineraryRow) {
   return {
     id: row.id,
     name: row.name,
-    destination: row.destination,
     dateStart: row.date_start,
     dateEnd: row.date_end,
     dayStart: row.day_start.slice(0, 5),
@@ -52,7 +50,6 @@ function toItinerary(row: ItineraryRow) {
 const itineraryColumns = `
   id,
   name,
-  destination,
   date_start::text AS date_start,
   date_end::text AS date_end,
   day_start::text AS day_start,
@@ -220,7 +217,6 @@ export const schema = createSchema({
     type Itinerary {
       id: ID!
       name: String!
-      destination: String!
       dateStart: String!
       dateEnd: String!
       dayStart: String!
@@ -274,7 +270,6 @@ export const schema = createSchema({
     type Mutation {
       createItinerary(
         name: String!
-        destination: String!
         dateStart: String!
         dateEnd: String!
       ): Itinerary!
@@ -291,7 +286,6 @@ export const schema = createSchema({
       updateItinerary(
         id: ID!
         name: String!
-        destination: String!
         dateStart: String!
         dateEnd: String!
         dayStart: String!
@@ -475,7 +469,6 @@ export const schema = createSchema({
         _parent,
         args: {
           name: string;
-          destination: string;
           dateStart: string;
           dateEnd: string;
         },
@@ -488,7 +481,6 @@ export const schema = createSchema({
         }
 
         const name = args.name.trim();
-        const destination = args.destination.trim();
         const dateStart = parseIsoDate(args.dateStart);
         const dateEnd = parseIsoDate(args.dateEnd);
 
@@ -518,7 +510,6 @@ export const schema = createSchema({
             `INSERT INTO itineraries (
                owner_id,
                name,
-               destination,
                date_start,
                date_end,
                day_start,
@@ -528,11 +519,11 @@ export const schema = createSchema({
                timezone
              )
              VALUES (
-               $1, $2, $3, $4::date, $5::date,
+               $1, $2, $3::date, $4::date,
                TIME '09:00', TIME '21:00', 30, '12h', 'UTC'
              )
              RETURNING ${itineraryColumns}`,
-            [context.userId, name, destination, dateStart, dateEnd],
+            [context.userId, name, dateStart, dateEnd],
           );
           const itinerary = result.rows[0];
 
@@ -798,7 +789,6 @@ export const schema = createSchema({
         args: {
           id: string;
           name: string;
-          destination: string;
           dateStart: string;
           dateEnd: string;
           dayStart: string;
@@ -814,7 +804,6 @@ export const schema = createSchema({
         }
 
         const name = args.name.trim();
-        const destination = args.destination.trim();
         const dateStart = parseIsoDate(args.dateStart);
         const dateEnd = parseIsoDate(args.dateEnd);
         const dayStart = parseTime(args.dayStart);
@@ -860,19 +849,17 @@ export const schema = createSchema({
         const result = await pool.query<ItineraryRow>(
           `UPDATE itineraries
            SET name = $1,
-               destination = $2,
-               date_start = $3::date,
-               date_end = $4::date,
-               day_start = $5::time,
-               day_end = $6::time,
-               time_interval = $7,
+               date_start = $2::date,
+               date_end = $3::date,
+               day_start = $4::time,
+               day_end = $5::time,
+               time_interval = $6,
                schedule_configured = true,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $8 AND owner_id = $9
+           WHERE id = $7 AND owner_id = $8
            RETURNING ${itineraryColumns}`,
           [
             name,
-            destination,
             dateStart,
             dateEnd,
             dayStart,

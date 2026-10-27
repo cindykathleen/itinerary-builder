@@ -68,13 +68,11 @@ export async function renameItinerary(formData: FormData) {
 const createItineraryMutation = /* GraphQL */ `
   mutation CreateItinerary(
     $name: String!
-    $destination: String!
     $dateStart: String!
     $dateEnd: String!
   ) {
     createItinerary(
       name: $name
-      destination: $destination
       dateStart: $dateStart
       dateEnd: $dateEnd
     ) {
@@ -147,7 +145,6 @@ const updateItineraryMutation = /* GraphQL */ `
   mutation UpdateItinerary(
     $id: ID!
     $name: String!
-    $destination: String!
     $dateStart: String!
     $dateEnd: String!
     $dayStart: String!
@@ -157,7 +154,6 @@ const updateItineraryMutation = /* GraphQL */ `
     updateItinerary(
       id: $id
       name: $name
-      destination: $destination
       dateStart: $dateStart
       dateEnd: $dateEnd
       dayStart: $dayStart
@@ -173,7 +169,6 @@ const updateItineraryMutation = /* GraphQL */ `
 export async function updateItinerary(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const destination = String(formData.get("destination") ?? "").trim();
   const dateStart = String(formData.get("dateStart") ?? "");
   const dateEnd = String(formData.get("dateEnd") ?? "");
   const dayStart = String(formData.get("dayStart") ?? "");
@@ -183,7 +178,6 @@ export async function updateItinerary(formData: FormData) {
   await executeGraphQL(updateItineraryMutation, {
     id,
     name,
-    destination,
     dateStart,
     dateEnd,
     dayStart,
@@ -451,13 +445,11 @@ export async function deleteActivity(formData: FormData) {
 
 export async function createItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
-  const destination = String(formData.get("destination") ?? "").trim();
   const dateStart = String(formData.get("dateStart") ?? "");
   const dateEnd = String(formData.get("dateEnd") ?? "");
 
   await executeGraphQL(createItineraryMutation, {
     name,
-    destination,
     dateStart,
     dateEnd,
   });
