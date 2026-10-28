@@ -4,6 +4,7 @@ import { executeGraphQL } from "@/lib/graphql/execute";
 import { ActivityHighlightProvider } from "./ActivityHighlight";
 import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
+import ItineraryMap from "./ItineraryMap";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
 import ItineraryTimeline from "./ItineraryTimeline";
 import ItineraryViewToggle from "./ItineraryViewToggle";
@@ -14,7 +15,6 @@ const itineraryQuery = /* GraphQL */ `
     itinerary(id: $id) {
       id
       name
-      destination
       dateStart
       dateEnd
       dayStart
@@ -37,12 +37,23 @@ const itineraryQuery = /* GraphQL */ `
         id
         name
       }
+      googlePlaces {
+        id
+        name
+        address
+        latitude
+        longitude
+        color
+      }
       activities {
         id
         name
         note
         categoryId
         stopId
+        googlePlaceId
+        googlePlaceName
+        googlePlaceAddress
         inSidebar
         startDate
         startTime
@@ -56,7 +67,6 @@ type ItineraryQuery = {
   itinerary: {
     id: string;
     name: string;
-    destination: string;
     dateStart: string;
     dateEnd: string;
     dayStart: string;
@@ -79,12 +89,23 @@ type ItineraryQuery = {
       id: string;
       name: string;
     }[];
+    googlePlaces: {
+      id: string;
+      name: string;
+      address: string;
+      latitude: number;
+      longitude: number;
+      color: string;
+    }[];
     activities: {
       id: string;
       name: string;
       note: string | null;
       categoryId: string | null;
       stopId: string | null;
+      googlePlaceId: string | null;
+      googlePlaceName: string | null;
+      googlePlaceAddress: string | null;
       inSidebar: boolean;
       startDate: string | null;
       startTime: string | null;
@@ -139,6 +160,9 @@ export default async function ItineraryPage({
       note: activity.note,
       categoryId: activity.categoryId,
       stopId: activity.stopId,
+      googlePlaceId: activity.googlePlaceId,
+      googlePlaceName: activity.googlePlaceName,
+      googlePlaceAddress: activity.googlePlaceAddress,
       startDate: activity.startDate,
     }));
 
@@ -156,7 +180,6 @@ export default async function ItineraryPage({
             itinerary={{
               id: itinerary.id,
               name: itinerary.name,
-              destination: itinerary.destination,
               dateStart: itinerary.dateStart,
               dateEnd: itinerary.dateEnd,
               dayStart: itinerary.dayStart,
@@ -177,7 +200,19 @@ export default async function ItineraryPage({
           activities={sidebarItems}
         />
       ) : (
-        <section className={styles.side} aria-label="Map" />
+        <section className={`${styles.side} ${styles.mapPanel}`} aria-label="Map">
+          <ItineraryMap
+            apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
+            places={itinerary.googlePlaces.map((place) => ({
+              id: place.id,
+              name: place.name,
+              address: place.address,
+              latitude: Number(place.latitude),
+              longitude: Number(place.longitude),
+              color: place.color,
+            }))}
+          />
+        </section>
       )}
 
       {itinerary.scheduleConfigured ? (

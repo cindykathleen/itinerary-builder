@@ -27,6 +27,7 @@
   flex-direction: column;
   flex: 1;
   gap: 24px;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -179,13 +180,118 @@
   color: #e53e3e;
 }
 
+.googlePlaceSearch {
+  position: relative;
+}
+
+.googlePlaceList {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 3;
+  max-height: 240px;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.googlePlaceOption,
+.googlePlaceOption:hover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.googlePlaceOption:hover,
+.googlePlaceOption[aria-selected="true"] {
+  background-color: var(--background);
+}
+
+.googlePlaceName,
+.googlePlaceAddress {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.googlePlaceAddress,
+.googlePlaceStatus {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.googlePlaceStatus {
+  padding: 8px 16px;
+}
+
+.googlePlace {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--background);
+}
+
+.googlePlaceText {
+  flex: 1;
+  min-width: 0;
+}
+
+.googlePlace .googlePlaceName,
+.googlePlace .googlePlaceAddress {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.googlePlaceClear,
+.googlePlaceClear:hover {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.googlePlaceClear:hover {
+  color: var(--text-primary);
+}
+
 .when,
 .note {
   color: var(--text-secondary);
 }
 
 .note {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .actions {

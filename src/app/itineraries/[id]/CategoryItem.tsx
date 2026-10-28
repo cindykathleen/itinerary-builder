@@ -83,6 +83,9 @@ export default function CategoryItem({
     note: string | null;
     scheduled: boolean;
     stopId: string | null;
+    googlePlaceId: string | null;
+    googlePlaceName: string | null;
+    googlePlaceAddress: string | null;
   }[];
   categories: CategoryOption[];
   stops: StopOption[];
@@ -249,6 +252,9 @@ export default function CategoryItem({
               id={activity.id}
               name={activity.name}
               note={activity.note}
+              googlePlaceId={activity.googlePlaceId}
+              googlePlaceName={activity.googlePlaceName}
+              googlePlaceAddress={activity.googlePlaceAddress}
               scheduled={activity.scheduled}
               categoryId={readOnly ? null : id}
               stopId={activity.stopId}

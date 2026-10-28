@@ -1,12 +1,12 @@
 import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import pool from "@/lib/db";
+import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
 import type { GraphQLContext } from "./context";
 
 type ItineraryRow = {
   id: string;
   name: string;
-  destination: string;
   date_start: string;
   date_end: string;
   day_start: string;
@@ -36,7 +36,6 @@ function toItinerary(row: ItineraryRow) {
   return {
     id: row.id,
     name: row.name,
-    destination: row.destination,
     dateStart: row.date_start,
     dateEnd: row.date_end,
     dayStart: row.day_start.slice(0, 5),
@@ -52,7 +51,6 @@ function toItinerary(row: ItineraryRow) {
 const itineraryColumns = `
   id,
   name,
-  destination,
   date_start::text AS date_start,
   date_end::text AS date_end,
   day_start::text AS day_start,
@@ -135,6 +133,39 @@ function parseTime(value: string) {
   return time;
 }
 
+function addUtcDays(iso: string, days: number) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function parseScheduleEnd(value: string) {
+  const match = /^(\d+):([0-5]\d)$/.exec(value.trim());
+
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (!Number.isInteger(hours) || hours > 24 * 366) {
+    return null;
+  }
+
+  if (hours >= 24 && hours % 24 === 0 && minutes === 0) {
+    return { extraDays: hours / 24 - 1, time: "24:00" };
+  }
+
+  const time = `${String(hours % 24).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+
+  if (!parseTime(time)) {
+    return null;
+  }
+
+  return { extraDays: Math.floor(hours / 24), time };
+}
+
 function minutesFromTime(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -209,6 +240,49 @@ async function assertCategoryMatchesPlace(
   }
 }
 
+async function savedGooglePlace(
+  itineraryId: string,
+  googlePlaceId: string | null | undefined,
+  sessionToken: string | null | undefined,
+) {
+  const placeId = googlePlaceId?.trim() ?? "";
+
+  if (!placeId) {
+    return null;
+  }
+
+  let place: GooglePlace;
+
+  try {
+    place = await getGooglePlace(placeId, sessionToken?.trim() || null);
+  } catch (error) {
+    if (error instanceof GooglePlacesError) {
+      throw new GraphQLError(error.message, {
+        extensions: { code: "BAD_USER_INPUT" },
+      });
+    }
+
+    throw error;
+  }
+
+  const result = await pool.query<{ id: string }>(
+    `INSERT INTO places (
+       itinerary_id, google_place_id, name, address, latitude, longitude
+     )
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (itinerary_id, google_place_id)
+     DO UPDATE SET
+       name = EXCLUDED.name,
+       address = EXCLUDED.address,
+       latitude = EXCLUDED.latitude,
+       longitude = EXCLUDED.longitude
+     RETURNING id`,
+    [itineraryId, place.placeId, place.name, place.address, place.latitude, place.longitude],
+  );
+
+  return result.rows[0].id;
+}
+
 export const schema = createSchema({
   typeDefs: /* GraphQL */ `
     enum ItineraryStatus {
@@ -220,7 +294,6 @@ export const schema = createSchema({
     type Itinerary {
       id: ID!
       name: String!
-      destination: String!
       dateStart: String!
       dateEnd: String!
       dayStart: String!
@@ -233,6 +306,7 @@ export const schema = createSchema({
       daySettings: [ItineraryDay!]!
       categories: [Category!]!
       stops: [Stop!]!
+      googlePlaces: [ItineraryPlace!]!
       activities: [Activity!]!
     }
 
@@ -254,12 +328,24 @@ export const schema = createSchema({
       name: String!
     }
 
+    type ItineraryPlace {
+      id: ID!
+      name: String!
+      address: String!
+      latitude: Float!
+      longitude: Float!
+      color: String!
+    }
+
     type Activity {
       id: ID!
       name: String!
       note: String
       categoryId: ID
       stopId: ID
+      googlePlaceId: String
+      googlePlaceName: String
+      googlePlaceAddress: String
       inSidebar: Boolean!
       startDate: String
       startTime: String
@@ -274,7 +360,6 @@ export const schema = createSchema({
     type Mutation {
       createItinerary(
         name: String!
-        destination: String!
         dateStart: String!
         dateEnd: String!
       ): Itinerary!
@@ -291,7 +376,6 @@ export const schema = createSchema({
       updateItinerary(
         id: ID!
         name: String!
-        destination: String!
         dateStart: String!
         dateEnd: String!
         dayStart: String!
@@ -316,12 +400,22 @@ export const schema = createSchema({
         note: String!
         categoryId: ID
         stopId: ID
+        googlePlaceId: String
+        sessionToken: String
         inSidebar: Boolean
         date: String
         startTime: String
         endTime: String
       ): Activity!
-      updateActivity(id: ID!, name: String!, note: String!, categoryId: ID, stopId: ID): Activity!
+      updateActivity(
+        id: ID!
+        name: String!
+        note: String!
+        categoryId: ID
+        stopId: ID
+        googlePlaceId: String
+        sessionToken: String
+      ): Activity!
       scheduleActivity(
         id: ID!
         itineraryId: ID!
@@ -374,6 +468,36 @@ export const schema = createSchema({
 
         return result.rows;
       },
+      googlePlaces: async (parent: { id: string }) => {
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          address: string;
+          latitude: number;
+          longitude: number;
+          color: string;
+        }>(
+          `SELECT id, name, address, latitude, longitude, color
+           FROM (
+             SELECT DISTINCT ON (places.id)
+                    places.id,
+                    places.name,
+                    places.address,
+                    places.latitude,
+                    places.longitude,
+                    COALESCE(categories.color, '#E0E6ED') AS color
+             FROM places
+             JOIN activities ON activities.place_id = places.id
+             LEFT JOIN categories ON categories.id = activities.category_id
+             WHERE places.itinerary_id = $1
+             ORDER BY places.id, activities.created_at
+           ) linked_places
+           ORDER BY name`,
+          [parent.id],
+        );
+
+        return result.rows;
+      },
       activities: async (parent: { id: string }) => {
         const result = await pool.query<{
           id: string;
@@ -381,6 +505,9 @@ export const schema = createSchema({
           note: string | null;
           category_id: string | null;
           stop_id: string | null;
+          google_place_id: string | null;
+          google_place_name: string | null;
+          google_place_address: string | null;
           in_sidebar: boolean;
           start_date: string | null;
           start_time: string | null;
@@ -392,6 +519,9 @@ export const schema = createSchema({
                   activities.note,
                   activities.category_id,
                   activities.stop_id,
+                  places.google_place_id,
+                  places.name AS google_place_name,
+                  places.address AS google_place_address,
                   activities.in_sidebar,
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'YYYY-MM-DD') AS start_date,
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS start_time,
@@ -399,6 +529,7 @@ export const schema = createSchema({
                   to_char(activities.end_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS end_time
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
+           LEFT JOIN places ON places.id = activities.place_id
            WHERE activities.itinerary_id = $1
            ORDER BY activities.created_at, activities.name`,
           [parent.id],
@@ -410,6 +541,9 @@ export const schema = createSchema({
           note: activity.note,
           categoryId: activity.category_id,
           stopId: activity.stop_id,
+          googlePlaceId: activity.google_place_id,
+          googlePlaceName: activity.google_place_name,
+          googlePlaceAddress: activity.google_place_address,
           inSidebar: activity.in_sidebar,
           startDate: activity.start_date,
           startTime: activity.start_time,
@@ -475,7 +609,6 @@ export const schema = createSchema({
         _parent,
         args: {
           name: string;
-          destination: string;
           dateStart: string;
           dateEnd: string;
         },
@@ -488,7 +621,6 @@ export const schema = createSchema({
         }
 
         const name = args.name.trim();
-        const destination = args.destination.trim();
         const dateStart = parseIsoDate(args.dateStart);
         const dateEnd = parseIsoDate(args.dateEnd);
 
@@ -518,7 +650,6 @@ export const schema = createSchema({
             `INSERT INTO itineraries (
                owner_id,
                name,
-               destination,
                date_start,
                date_end,
                day_start,
@@ -528,11 +659,11 @@ export const schema = createSchema({
                timezone
              )
              VALUES (
-               $1, $2, $3, $4::date, $5::date,
+               $1, $2, $3::date, $4::date,
                TIME '09:00', TIME '21:00', 30, '12h', 'UTC'
              )
              RETURNING ${itineraryColumns}`,
-            [context.userId, name, destination, dateStart, dateEnd],
+            [context.userId, name, dateStart, dateEnd],
           );
           const itinerary = result.rows[0];
 
@@ -798,7 +929,6 @@ export const schema = createSchema({
         args: {
           id: string;
           name: string;
-          destination: string;
           dateStart: string;
           dateEnd: string;
           dayStart: string;
@@ -814,7 +944,6 @@ export const schema = createSchema({
         }
 
         const name = args.name.trim();
-        const destination = args.destination.trim();
         const dateStart = parseIsoDate(args.dateStart);
         const dateEnd = parseIsoDate(args.dateEnd);
         const dayStart = parseTime(args.dayStart);
@@ -860,19 +989,17 @@ export const schema = createSchema({
         const result = await pool.query<ItineraryRow>(
           `UPDATE itineraries
            SET name = $1,
-               destination = $2,
-               date_start = $3::date,
-               date_end = $4::date,
-               day_start = $5::time,
-               day_end = $6::time,
-               time_interval = $7,
+               date_start = $2::date,
+               date_end = $3::date,
+               day_start = $4::time,
+               day_end = $5::time,
+               time_interval = $6,
                schedule_configured = true,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $8 AND owner_id = $9
+           WHERE id = $7 AND owner_id = $8
            RETURNING ${itineraryColumns}`,
           [
             name,
-            destination,
             dateStart,
             dateEnd,
             dayStart,
@@ -1241,6 +1368,8 @@ export const schema = createSchema({
           note: string;
           categoryId?: string | null;
           stopId?: string | null;
+          googlePlaceId?: string | null;
+          sessionToken?: string | null;
           inSidebar?: boolean | null;
           date?: string | null;
           startTime?: string | null;
@@ -1352,6 +1481,12 @@ export const schema = createSchema({
           }
         }
 
+        const placeId = await savedGooglePlace(
+          args.itineraryId,
+          args.googlePlaceId,
+          args.sessionToken,
+        );
+
         const result = await pool.query<{
           id: string;
           name: string;
@@ -1361,7 +1496,7 @@ export const schema = createSchema({
         }>(
           scheduling
             ? `INSERT INTO activities (
-                 itinerary_id, category_id, stop_id, name, note, start_at, end_at, in_sidebar
+                 itinerary_id, category_id, stop_id, place_id, name, note, start_at, end_at, in_sidebar
                )
                VALUES (
                  $1,
@@ -1369,19 +1504,23 @@ export const schema = createSchema({
                  $3,
                  $4,
                  $5,
-                 (($6::date + $7::time) AT TIME ZONE $9),
-                 (($6::date + $8::time) AT TIME ZONE $9),
-                 $10
+                 $6,
+                 (($7::date + $8::time) AT TIME ZONE $10),
+                 (($7::date + $9::time) AT TIME ZONE $10),
+                 $11
                )
                RETURNING id, name, note, category_id, stop_id`
-            : `INSERT INTO activities (itinerary_id, category_id, stop_id, name, note, in_sidebar)
-               VALUES ($1, $2, $3, $4, $5, $6)
+            : `INSERT INTO activities (
+                 itinerary_id, category_id, stop_id, place_id, name, note, in_sidebar
+               )
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
                RETURNING id, name, note, category_id, stop_id`,
           scheduling
             ? [
                 args.itineraryId,
                 categoryId,
                 stopId,
+                placeId,
                 name,
                 note || null,
                 scheduleDate,
@@ -1390,7 +1529,7 @@ export const schema = createSchema({
                 itinerary.timezone,
                 inSidebar,
               ]
-            : [args.itineraryId, categoryId, stopId, name, note || null, inSidebar],
+            : [args.itineraryId, categoryId, stopId, placeId, name, note || null, inSidebar],
         );
 
         const activity = result.rows[0];
@@ -1411,6 +1550,8 @@ export const schema = createSchema({
           note: string;
           categoryId?: string | null;
           stopId?: string | null;
+          googlePlaceId?: string | null;
+          sessionToken?: string | null;
         },
         context: GraphQLContext,
       ) => {
@@ -1472,6 +1613,32 @@ export const schema = createSchema({
           }
         }
 
+        const requestedPlaceId = args.googlePlaceId?.trim() ?? "";
+        let placeId: string | null = null;
+
+        if (requestedPlaceId && args.sessionToken?.trim()) {
+          placeId = await savedGooglePlace(
+            activityRow.itinerary_id,
+            requestedPlaceId,
+            args.sessionToken,
+          );
+        } else if (requestedPlaceId) {
+          const existingPlace = await pool.query<{ id: string }>(
+            `SELECT id
+             FROM places
+             WHERE itinerary_id = $1 AND google_place_id = $2`,
+            [activityRow.itinerary_id, requestedPlaceId],
+          );
+
+          if (!existingPlace.rows[0]) {
+            throw new GraphQLError("Choose a place from the suggestions.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          placeId = existingPlace.rows[0].id;
+        }
+
         const result = await pool.query<{
           id: string;
           name: string;
@@ -1484,10 +1651,11 @@ export const schema = createSchema({
                note = $2,
                category_id = $3,
                stop_id = $4,
+               place_id = $5,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $5 AND itinerary_id = $6
+           WHERE id = $6 AND itinerary_id = $7
            RETURNING id, name, note, category_id, stop_id`,
-          [name, note || null, categoryId, stopId, args.id, activityRow.itinerary_id],
+          [name, note || null, categoryId, stopId, placeId, args.id, activityRow.itinerary_id],
         );
 
         const activity = result.rows[0];
@@ -1513,9 +1681,9 @@ export const schema = createSchema({
 
         const date = parseIsoDate(args.date);
         const startTime = parseTime(args.startTime);
-        const endTime = parseTime(args.endTime);
+        const parsedEnd = parseScheduleEnd(args.endTime);
 
-        if (!date || !startTime || !endTime) {
+        if (!date || !startTime || !parsedEnd) {
           throw new GraphQLError("Choose a time on this itinerary.", {
             extensions: { code: "BAD_USER_INPUT" },
           });
@@ -1554,12 +1722,20 @@ export const schema = createSchema({
         const dayStart = parseTime(itinerary.day_start);
         const dayEnd = parseTime(itinerary.day_end);
 
+        const endDate = addUtcDays(date, parsedEnd.extraDays);
+
         if (
           !dayStart ||
           !dayEnd ||
-          !validScheduleRange(dayStart, dayEnd, Number(itinerary.time_interval), startTime, endTime) ||
+          !validScheduleRange(
+            dayStart,
+            dayEnd,
+            Number(itinerary.time_interval),
+            startTime,
+            parsedEnd.time,
+          ) ||
           date < itinerary.date_start ||
-          date > itinerary.date_end
+          endDate > itinerary.date_end
         ) {
           throw new GraphQLError("Choose a time on this itinerary.", {
             extensions: { code: "BAD_USER_INPUT" },
@@ -1569,10 +1745,18 @@ export const schema = createSchema({
         await pool.query(
           `UPDATE activities
            SET start_at = (($3::date + $4::time) AT TIME ZONE $6),
-               end_at = (($3::date + $5::time) AT TIME ZONE $6),
+               end_at = ((($3::date + $7::int) + $5::time) AT TIME ZONE $6),
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $1 AND itinerary_id = $2`,
-          [args.id, args.itineraryId, date, startTime, endTime, itinerary.timezone],
+          [
+            args.id,
+            args.itineraryId,
+            date,
+            startTime,
+            parsedEnd.time,
+            itinerary.timezone,
+            parsedEnd.extraDays,
+          ],
         );
 
         return true;

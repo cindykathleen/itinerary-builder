@@ -25,7 +25,6 @@ export default function ItineraryCreate({
   const dateStartId = `${idPrefix}-date-start`;
   const dateEndId = `${idPrefix}-date-end`;
   const dateErrorId = `${idPrefix}-date-error`;
-  const destinationId = `${idPrefix}-destination`;
   const [name, setName] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
@@ -170,16 +169,6 @@ export default function ItineraryCreate({
                 ) : null}
               </div>
             </fieldset>
-
-            <div className={dialogStyles.field}>
-              <label htmlFor={destinationId}>Destination</label>
-              <input
-                id={destinationId}
-                name="destination"
-                type="text"
-                maxLength={255}
-              />
-            </div>
           </div>
 
           <div className={dialogStyles.actions}>

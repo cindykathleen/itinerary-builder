@@ -112,12 +112,61 @@ function formatTime(minutes: number, timeFormat: string) {
   return `${hour12}:${mins} ${period}`;
 }
 
+const DAY_MINUTES = 24 * 60;
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function describeSpan(endMinutes: number) {
+  if (endMinutes <= DAY_MINUTES) {
+    return { extraDays: 0, endClock: endMinutes };
+  }
+
+  const extraDays = Math.floor(endMinutes / DAY_MINUTES);
+  const endClock = endMinutes % DAY_MINUTES;
+
+  if (endClock === 0) {
+    return { extraDays: extraDays - 1, endClock: DAY_MINUTES };
+  }
+
+  return { extraDays, endClock };
+}
+
 function hasDragType(dataTransfer: DataTransfer, type: string) {
   return Array.from(dataTransfer.types).includes(type);
+}
+
+function dateAtX(root: HTMLElement, clientX: number) {
+  const seen = new Map<string, DOMRect>();
+
+  for (const cell of root.querySelectorAll<HTMLElement>("[data-date]")) {
+    const date = cell.dataset.date;
+
+    if (!date || seen.has(date)) {
+      continue;
+    }
+
+    seen.set(date, cell.getBoundingClientRect());
+  }
+
+  const columns = [...seen.entries()];
+
+  if (columns.length === 0) {
+    return null;
+  }
+
+  if (clientX < columns[0][1].left) {
+    return columns[0][0];
+  }
+
+  const last = columns[columns.length - 1];
+
+  if (clientX >= last[1].right) {
+    return last[0];
+  }
+
+  return columns.find(([, rect]) => clientX >= rect.left && clientX < rect.right)?.[0] ?? null;
 }
 
 function cellAtPoint(root: HTMLElement, clientX: number, clientY: number) {
@@ -134,65 +183,139 @@ function cellAtPoint(root: HTMLElement, clientX: number, clientY: number) {
   return null;
 }
 
+type ActivityFrame = {
+  startIndex: number;
+  extraDays: number;
+  startMinutes: number;
+  endClock: number;
+};
+
+function activityFrame(activity: TimelineActivity, dayList: TimelineDay[]): ActivityFrame | null {
+  if (!activity.startDate || !activity.startTime || !activity.endTime) {
+    return null;
+  }
+
+  const startMinutes = toMinutes(activity.startTime);
+  const endMinutes = toMinutes(activity.endTime);
+  const startIndex = dayList.findIndex((day) => day.iso === activity.startDate);
+
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes || startIndex < 0) {
+    return null;
+  }
+
+  const span = describeSpan(endMinutes);
+  const extraDays = Math.min(span.extraDays, Math.max(0, dayList.length - 1 - startIndex));
+
+  if ((extraDays === 0 && span.endClock <= startMinutes) || span.endClock <= 0) {
+    return null;
+  }
+
+  return { startIndex, extraDays, startMinutes, endClock: span.endClock };
+}
+
+function daySlices(frame: ActivityFrame, dayStartMinutes: number, dayEndBoundary: number) {
+  const slices: { dayIndex: number; startMinutes: number; endMinutes: number }[] = [];
+
+  for (let offset = 0; offset <= frame.extraDays; offset += 1) {
+    const first = offset === 0;
+    const last = offset === frame.extraDays;
+    const startMinutes = first ? frame.startMinutes : dayStartMinutes;
+    const endMinutes = last ? frame.endClock : dayEndBoundary;
+
+    if (endMinutes <= startMinutes) {
+      continue;
+    }
+
+    slices.push({ dayIndex: frame.startIndex + offset, startMinutes, endMinutes });
+  }
+
+  return slices;
+}
+
+function slicesOverlap(
+  left: { dayIndex: number; startMinutes: number; endMinutes: number }[],
+  right: { dayIndex: number; startMinutes: number; endMinutes: number }[],
+) {
+  return left.some((slice) =>
+    right.some(
+      (other) =>
+        slice.dayIndex === other.dayIndex &&
+        slice.startMinutes < other.endMinutes &&
+        other.startMinutes < slice.endMinutes,
+    ),
+  );
+}
+
 function scheduledRange(
   activity: TimelineActivity,
   date: string,
   startTime: string,
   dayEnd: string,
   timeInterval: number,
+  dayList: TimelineDay[],
 ) {
   const startMinutes = toMinutes(startTime);
   const dayEndMinutes = toMinutes(dayEnd);
+  const startIndex = dayList.findIndex((day) => day.iso === date);
 
-  if (startMinutes === null || dayEndMinutes === null || startMinutes > dayEndMinutes) {
+  if (
+    startMinutes === null ||
+    dayEndMinutes === null ||
+    startMinutes > dayEndMinutes ||
+    startIndex < 0
+  ) {
     return null;
   }
 
-  const currentStart = activity.startTime ? toMinutes(activity.startTime) : null;
-  const currentEnd = activity.endTime ? toMinutes(activity.endTime) : null;
-  const duration =
-    currentStart !== null && currentEnd !== null && currentEnd > currentStart
-      ? currentEnd - currentStart
-      : timeInterval;
-  const endMinutes = Math.min(startMinutes + duration, dayEndMinutes + timeInterval);
+  const current = activityFrame(activity, dayList);
+  const duration = current ? current.endClock - current.startMinutes : timeInterval;
+  const extraDays = current?.extraDays ?? 0;
+  const endClock = Math.min(startMinutes + duration, dayEndMinutes + timeInterval);
 
-  if (endMinutes <= startMinutes) {
+  if (endClock <= startMinutes || startIndex + extraDays >= dayList.length) {
     return null;
   }
 
-  return { date, startTime, endTime: minutesToTime(endMinutes) };
+  return { date, startTime, endTime: minutesToTime(extraDays * DAY_MINUTES + endClock) };
 }
 
 function placementConflicts(
   activities: TimelineActivity[],
   id: string,
   placement: { date: string; startTime: string; endTime: string },
+  dayList: TimelineDay[],
+  dayStartMinutes: number,
+  dayEndBoundary: number,
 ) {
-  const start = toMinutes(placement.startTime);
-  const end = toMinutes(placement.endTime);
+  const next = activityFrame(
+    {
+      id,
+      name: "",
+      color: "",
+      inSidebar: true,
+      startDate: placement.date,
+      startTime: placement.startTime,
+      endTime: placement.endTime,
+    },
+    dayList,
+  );
 
-  if (start === null || end === null) {
+  if (!next) {
     return true;
   }
 
+  const nextSlices = daySlices(next, dayStartMinutes, dayEndBoundary);
+
   return activities.some((activity) => {
-    if (
-      activity.id === id ||
-      activity.startDate !== placement.date ||
-      !activity.startTime ||
-      !activity.endTime
-    ) {
+    if (activity.id === id) {
       return false;
     }
 
-    const otherStart = toMinutes(activity.startTime);
-    const otherEnd = toMinutes(activity.endTime);
+    const frame = activityFrame(activity, dayList);
 
-    if (otherStart === null || otherEnd === null) {
-      return false;
-    }
-
-    return start < otherEnd && end > otherStart;
+    return frame
+      ? slicesOverlap(nextSlices, daySlices(frame, dayStartMinutes, dayEndBoundary))
+      : false;
   });
 }
 
@@ -357,22 +480,26 @@ export default function ItineraryTimeline({
     }
   }, [pendingCreate]);
 
+  const dayStartMinutes = toMinutes(dayStart) ?? slots[0] ?? 0;
+  const dayEndBoundary = slots.length > 0 ? boundaryMinutes(slots.length) : 0;
+
   const slotTaken = (date: string, minutes: number) => {
     const finish = minutes + timeInterval;
+    const dayIndex = days.findIndex((day) => day.iso === date);
 
     return items.some((activity) => {
-      if (activity.startDate !== date || !activity.startTime || !activity.endTime) {
+      const frame = activityFrame(activity, days);
+
+      if (!frame) {
         return false;
       }
 
-      const start = toMinutes(activity.startTime);
-      const end = toMinutes(activity.endTime);
-
-      if (start === null || end === null) {
-        return false;
-      }
-
-      return minutes < end && finish > start;
+      return daySlices(frame, dayStartMinutes, dayEndBoundary).some(
+        (slice) =>
+          slice.dayIndex === dayIndex &&
+          minutes < slice.endMinutes &&
+          finish > slice.startMinutes,
+      );
     });
   };
 
@@ -526,17 +653,19 @@ export default function ItineraryTimeline({
   const canPlace = (id: string, date: string, startTime: string) => {
     const activity = items.find((item) => item.id === id);
     const placement = activity
-      ? scheduledRange(activity, date, startTime, dayEnd, timeInterval)
+      ? scheduledRange(activity, date, startTime, dayEnd, timeInterval, days)
       : null;
 
-    return placement !== null && !placementConflicts(items, id, placement);
+    return placement !== null && !placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary);
   };
 
   const placeActivity = async (id: string, date: string, startTime: string) => {
     const current = items.find((activity) => activity.id === id);
-    const placement = current ? scheduledRange(current, date, startTime, dayEnd, timeInterval) : null;
+    const placement = current
+      ? scheduledRange(current, date, startTime, dayEnd, timeInterval, days)
+      : null;
 
-    if (!current || !placement || placementConflicts(items, id, placement)) {
+    if (!current || !placement || placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary)) {
       return;
     }
 
@@ -638,9 +767,10 @@ export default function ItineraryTimeline({
         minutesToTime(Number(cell.dataset.minutes)),
         dayEnd,
         timeInterval,
+        days,
       );
 
-      if (!placement || placementConflicts(items, activity.id, placement)) {
+      if (!placement || placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
         next = null;
         setOverKey(null);
         setMovePreview(null);
@@ -684,14 +814,17 @@ export default function ItineraryTimeline({
     event.preventDefault();
     event.stopPropagation();
 
-    const startIndex = activity.startTime ? slots.indexOf(toMinutes(activity.startTime) ?? -1) : -1;
-    let endIndex = boundaryIndex(activity.endTime, slots);
+    const frame = activityFrame(activity, days);
+    const startIndex = frame ? slots.indexOf(frame.startMinutes) : -1;
+    const endIndex = frame ? boundaryIndex(minutesToTime(frame.endClock), slots) : -1;
 
-    if (endIndex <= startIndex) {
-      endIndex = Math.min(slots.length, startIndex + 1);
-    }
-
-    if (startIndex < 0 || endIndex <= startIndex || !activity.startDate) {
+    if (
+      !frame ||
+      startIndex < 0 ||
+      endIndex < 0 ||
+      !activity.startDate ||
+      (frame.extraDays === 0 && endIndex <= startIndex)
+    ) {
       return;
     }
 
@@ -711,14 +844,22 @@ export default function ItineraryTimeline({
 
       if (edge === "end") {
         nextStart = originStart;
-        nextEnd = clamp(originEnd + delta, originStart + 1, slots.length);
+        nextEnd = clamp(
+          originEnd + delta,
+          frame.extraDays > 0 ? 1 : originStart + 1,
+          slots.length,
+        );
       } else {
-        nextStart = clamp(originStart + delta, 0, originEnd - 1);
+        nextStart = clamp(
+          originStart + delta,
+          0,
+          frame.extraDays > 0 ? slots.length - 1 : originEnd - 1,
+        );
         nextEnd = originEnd;
       }
 
       const startTime = minutesToTime(slots[nextStart]);
-      const endTime = minutesToTime(boundaryMinutes(nextEnd));
+      const endTime = minutesToTime(frame.extraDays * DAY_MINUTES + boundaryMinutes(nextEnd));
       setItems((current) =>
         current.map((item) =>
           item.id === activity.id ? { ...item, startTime, endTime } : item,
@@ -731,7 +872,7 @@ export default function ItineraryTimeline({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       const startTime = minutesToTime(slots[nextStart]);
-      const endTime = minutesToTime(boundaryMinutes(nextEnd));
+      const endTime = minutesToTime(frame.extraDays * DAY_MINUTES + boundaryMinutes(nextEnd));
       const originalEnd = activity.endTime ?? minutesToTime(boundaryMinutes(originEnd));
 
       if (startTime === activity.startTime && endTime === originalEnd) {
@@ -743,6 +884,109 @@ export default function ItineraryTimeline({
         id: activity.id,
         date: activity.startDate ?? "",
         startTime,
+        endTime,
+      }).catch(() => setItems(previous));
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const resizeActivityDays = (
+    activity: TimelineActivity,
+    edge: "start" | "end",
+    event: ReactPointerEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const frame = activityFrame(activity, days);
+
+    if (!frame || !activity.startTime) {
+      return;
+    }
+
+    const originEnd = frame.startIndex + frame.extraDays;
+    let nextStart = frame.startIndex;
+    let nextEnd = originEnd;
+    const previous = items;
+    let scrolledThisFrame = false;
+
+    const apply = (clientX: number) => {
+      const root = timelineRef.current;
+      const date = root ? dateAtX(root, clientX) : null;
+      const column = date ? days.findIndex((day) => day.iso === date) : -1;
+
+      if (column < 0) {
+        return;
+      }
+
+      const candidateStart = edge === "end" ? frame.startIndex : clamp(column, 0, originEnd);
+      const candidateEnd = edge === "end" ? clamp(column, frame.startIndex, days.length - 1) : originEnd;
+      const extraDays = candidateEnd - candidateStart;
+      const endTime = minutesToTime(extraDays * DAY_MINUTES + frame.endClock);
+      const placement = {
+        date: days[candidateStart].iso,
+        startTime: activity.startTime ?? "",
+        endTime,
+      };
+
+      if (placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
+        return;
+      }
+
+      nextStart = candidateStart;
+      nextEnd = candidateEnd;
+      setItems((current) =>
+        current.map((item) =>
+          item.id === activity.id
+            ? { ...item, startDate: placement.date, endTime: placement.endTime }
+            : item,
+        ),
+      );
+    };
+
+    const onMove = (pointerEvent: PointerEvent) => {
+      const scroller = timelineRef.current;
+
+      if (scroller && !scrolledThisFrame) {
+        const rect = scroller.getBoundingClientRect();
+        const edgeDistance = 36;
+        let deltaX = 0;
+
+        if (pointerEvent.clientX < rect.left + edgeDistance) {
+          deltaX = -18;
+        } else if (pointerEvent.clientX > rect.right - edgeDistance) {
+          deltaX = 18;
+        }
+
+        if (deltaX !== 0) {
+          scroller.scrollLeft += deltaX;
+          scrolledThisFrame = true;
+          requestAnimationFrame(() => {
+            scrolledThisFrame = false;
+          });
+        }
+      }
+
+      apply(pointerEvent.clientX);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const startDate = days[nextStart]?.iso;
+      const endTime = minutesToTime((nextEnd - nextStart) * DAY_MINUTES + frame.endClock);
+
+      if (!startDate || (startDate === activity.startDate && endTime === activity.endTime)) {
+        return;
+      }
+
+      void scheduleActivity({
+        itineraryId,
+        id: activity.id,
+        date: startDate,
+        startTime: activity.startTime ?? "",
         endTime,
       }).catch(() => setItems(previous));
     };
@@ -947,64 +1191,86 @@ export default function ItineraryTimeline({
             return null;
           }
 
-          const column = days.findIndex((day) => day.iso === shown.startDate);
-          const startMinutes = toMinutes(shown.startTime);
-          const startIndex = startMinutes === null ? -1 : slots.indexOf(startMinutes);
-          let endIndex = boundaryIndex(shown.endTime, slots);
+          const frame = activityFrame(shown, days);
 
-          if (endIndex <= startIndex) {
-            endIndex = Math.min(slots.length, startIndex + 1);
-          }
-
-          if (column < 0 || startIndex < 0 || endIndex <= startIndex) {
+          if (!frame) {
             return null;
           }
 
-          return (
-            <div
-              key={activity.id}
-              data-activity-id={activity.id}
-              className={[
-                styles.block,
-                movePreview?.id === activity.id ? styles.blockMoving : "",
-                hoveredId === activity.id ? styles.blockHighlighted : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-label={activity.name}
-              style={{
-                gridColumn: column + 2,
-                gridRow: `${startIndex + 2} / ${endIndex + 2}`,
-                backgroundColor: activity.color,
-                color: categoryTextColor(activity.color) ?? "var(--text-primary)",
-              }}
-              onPointerDown={(event) => movePlacedActivity(activity, event)}
-            >
-              <span
-                className={`${styles.resizeHandle} ${styles.resizeTop}`}
-                data-no-drag
-                onPointerDown={(event) => resizeActivity(activity, "start", event)}
-              />
-              <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
-                {activity.name}
-              </span>
-              <button
-                className={styles.blockDelete}
-                type="button"
-                data-no-drag
-                aria-label={`Remove ${activity.name}`}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => setPendingRemove(activity)}
+          return daySlices(frame, dayStartMinutes, dayEndBoundary).map((slice, index, slices) => {
+            const startIndex = slots.indexOf(slice.startMinutes);
+            const endIndex = boundaryIndex(minutesToTime(slice.endMinutes), slots);
+            const first = index === 0;
+            const last = index === slices.length - 1;
+
+            if (startIndex < 0 || endIndex <= startIndex) {
+              return null;
+            }
+
+            return (
+              <div
+                key={`${activity.id}-${slice.dayIndex}`}
+                data-activity-id={activity.id}
+                className={[
+                  styles.block,
+                  movePreview?.id === activity.id ? styles.blockMoving : "",
+                  hoveredId === activity.id ? styles.blockHighlighted : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-label={activity.name}
+                style={{
+                  gridColumn: slice.dayIndex + 2,
+                  gridRow: `${startIndex + 2} / ${endIndex + 2}`,
+                  backgroundColor: activity.color,
+                  color: categoryTextColor(activity.color) ?? "var(--text-primary)",
+                }}
+                onPointerDown={(event) => movePlacedActivity(activity, event)}
               >
-                ×
-              </button>
-              <span
-                className={`${styles.resizeHandle} ${styles.resizeBottom}`}
-                data-no-drag
-                onPointerDown={(event) => resizeActivity(activity, "end", event)}
-              />
-            </div>
-          );
+                {first && days.length > 1 ? (
+                  <span
+                    className={`${styles.resizeHandle} ${styles.resizeLeft}`}
+                    data-no-drag
+                    onPointerDown={(event) => resizeActivityDays(activity, "start", event)}
+                  />
+                ) : null}
+                {first ? (
+                  <span
+                    className={`${styles.resizeHandle} ${styles.resizeTop}`}
+                    data-no-drag
+                    onPointerDown={(event) => resizeActivity(activity, "start", event)}
+                  />
+                ) : null}
+                <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
+                  {activity.name}
+                </span>
+                <button
+                  className={styles.blockDelete}
+                  type="button"
+                  data-no-drag
+                  aria-label={`Remove ${activity.name}`}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setPendingRemove(activity)}
+                >
+                  ×
+                </button>
+                {last ? (
+                  <span
+                    className={`${styles.resizeHandle} ${styles.resizeBottom}`}
+                    data-no-drag
+                    onPointerDown={(event) => resizeActivity(activity, "end", event)}
+                  />
+                ) : null}
+                {last && days.length > 1 ? (
+                  <span
+                    className={`${styles.resizeHandle} ${styles.resizeRight}`}
+                    data-no-drag
+                    onPointerDown={(event) => resizeActivityDays(activity, "end", event)}
+                  />
+                ) : null}
+              </div>
+            );
+          });
         })}
       </div>
 
