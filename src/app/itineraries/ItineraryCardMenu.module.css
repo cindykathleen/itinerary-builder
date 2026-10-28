@@ -38,10 +38,10 @@
 
 .dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 2;
-  min-width: 180px;
+  min-width: 184px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
