@@ -167,6 +167,7 @@
 .blockDelete,
 .blockDelete:hover {
   position: absolute;
+  z-index: 2;
   top: 2px;
   right: 2px;
   display: flex;
@@ -200,12 +201,36 @@
   touch-action: none;
 }
 
+.resizeTop,
+.resizeBottom {
+  z-index: 1;
+}
+
 .resizeTop {
   top: 0;
 }
 
 .resizeBottom {
   bottom: 0;
+}
+
+.resizeLeft,
+.resizeRight {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  height: auto;
+  cursor: ew-resize;
+}
+
+.resizeLeft {
+  right: auto;
+  left: 0;
+}
+
+.resizeRight {
+  left: auto;
+  right: 0;
 }
 
 .day .headerInput {

@@ -133,6 +133,39 @@ function parseTime(value: string) {
   return time;
 }
 
+function addUtcDays(iso: string, days: number) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function parseScheduleEnd(value: string) {
+  const match = /^(\d+):([0-5]\d)$/.exec(value.trim());
+
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (!Number.isInteger(hours) || hours > 24 * 366) {
+    return null;
+  }
+
+  if (hours >= 24 && hours % 24 === 0 && minutes === 0) {
+    return { extraDays: hours / 24 - 1, time: "24:00" };
+  }
+
+  const time = `${String(hours % 24).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+
+  if (!parseTime(time)) {
+    return null;
+  }
+
+  return { extraDays: Math.floor(hours / 24), time };
+}
+
 function minutesFromTime(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -1648,9 +1681,9 @@ export const schema = createSchema({
 
         const date = parseIsoDate(args.date);
         const startTime = parseTime(args.startTime);
-        const endTime = parseTime(args.endTime);
+        const parsedEnd = parseScheduleEnd(args.endTime);
 
-        if (!date || !startTime || !endTime) {
+        if (!date || !startTime || !parsedEnd) {
           throw new GraphQLError("Choose a time on this itinerary.", {
             extensions: { code: "BAD_USER_INPUT" },
           });
@@ -1689,12 +1722,20 @@ export const schema = createSchema({
         const dayStart = parseTime(itinerary.day_start);
         const dayEnd = parseTime(itinerary.day_end);
 
+        const endDate = addUtcDays(date, parsedEnd.extraDays);
+
         if (
           !dayStart ||
           !dayEnd ||
-          !validScheduleRange(dayStart, dayEnd, Number(itinerary.time_interval), startTime, endTime) ||
+          !validScheduleRange(
+            dayStart,
+            dayEnd,
+            Number(itinerary.time_interval),
+            startTime,
+            parsedEnd.time,
+          ) ||
           date < itinerary.date_start ||
-          date > itinerary.date_end
+          endDate > itinerary.date_end
         ) {
           throw new GraphQLError("Choose a time on this itinerary.", {
             extensions: { code: "BAD_USER_INPUT" },
@@ -1704,10 +1745,18 @@ export const schema = createSchema({
         await pool.query(
           `UPDATE activities
            SET start_at = (($3::date + $4::time) AT TIME ZONE $6),
-               end_at = (($3::date + $5::time) AT TIME ZONE $6),
+               end_at = ((($3::date + $7::int) + $5::time) AT TIME ZONE $6),
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $1 AND itinerary_id = $2`,
-          [args.id, args.itineraryId, date, startTime, endTime, itinerary.timezone],
+          [
+            args.id,
+            args.itineraryId,
+            date,
+            startTime,
+            parsedEnd.time,
+            itinerary.timezone,
+            parsedEnd.extraDays,
+          ],
         );
 
         return true;
