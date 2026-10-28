@@ -24,7 +24,7 @@
 .link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   padding: 8px;
   border-radius: 999px;
@@ -34,12 +34,136 @@
 .link::before {
   content: "";
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background-color: var(--text-primary);
 }
 
 .link[aria-current="page"] {
   background-color: var(--secondary);
+}
+
+.menu {
+  display: none;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.menu[open] {
+  z-index: 4;
+}
+
+.trigger,
+.trigger:hover {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  padding: 8px 16px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: left;
+  list-style: none;
+  cursor: pointer;
+}
+
+.trigger::-webkit-details-marker {
+  display: none;
+}
+
+.trigger::marker {
+  content: "";
+}
+
+.triggerLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.menu[open] .chevron {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.menu:not([open]) .menuList {
+  display: none;
+}
+
+.menuList {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 4;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  list-style: none;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  overflow: hidden;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.option:hover {
+  background-color: var(--background);
+}
+
+.option[aria-current="page"] {
+  background-color: color-mix(in srgb, var(--secondary) 45%, #ffffff);
+}
+
+@media (max-width: 800px) {
+  .sidebar > button {
+    display: none;
+  }
+
+  .sidebar:has(.menu[open]) {
+    position: relative;
+    z-index: 2;
+  }
+
+  .list {
+    display: none;
+  }
+
+  .menu {
+    display: block;
+  }
 }

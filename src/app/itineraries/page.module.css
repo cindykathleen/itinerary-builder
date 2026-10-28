@@ -19,14 +19,23 @@
 
 .headerActions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+}
+
+.headerActions button {
+  white-space: nowrap;
 }
 
 .title {
+  min-width: 0;
+  overflow: hidden;
   color: var(--primary);
   font-size: 32px;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .board {
@@ -41,10 +50,41 @@
 @media (max-width: 800px) {
   .page {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: auto;
     padding: 16px;
   }
 
   .header {
     grid-column: 1;
+  }
+
+  .board {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 520px) {
+  .header {
+    flex-direction: column;
+    align-items: center;
+    row-gap: 16px;
+  }
+
+  .title {
+    flex: none;
+    width: 100%;
+    font-size: 24px;
+    line-height: 32px;
+    text-align: center;
+  }
+
+  .headerActions {
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .board {
+    padding: 16px;
   }
 }

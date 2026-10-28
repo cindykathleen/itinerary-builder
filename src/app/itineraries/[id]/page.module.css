@@ -7,7 +7,7 @@
   display: grid;
   grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
   grid-template-rows: auto minmax(0, 1fr);
-  column-gap: 20px;
+  column-gap: 24px;
   row-gap: 24px;
   padding: 32px 40px 40px;
   overflow: hidden;
@@ -19,13 +19,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
 }
 
 .titleRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .back,
@@ -40,8 +42,8 @@
 }
 
 .backIcon {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-left: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: translateX(2px) rotate(45deg);
@@ -49,13 +51,17 @@
 
 .title {
   min-width: 0;
+  overflow: hidden;
   color: var(--primary);
   font-size: 32px;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .controls {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 24px;
 }
@@ -68,6 +74,7 @@
   font-family: inherit;
   font-size: 16px;
   font-weight: 400;
+  white-space: nowrap;
 }
 
 .edit:hover {
@@ -77,7 +84,7 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   border-radius: 8px;
   background-color: var(--surface);
 }
@@ -89,6 +96,7 @@
   background-color: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
+  white-space: nowrap;
 }
 
 .nav button[aria-pressed="true"],
@@ -179,7 +187,7 @@
 
 .mapPopupAddress {
   font-size: 16px;
-  line-height: 22px;
+  line-height: 24px;
 }
 
 .mapStatus,
@@ -212,7 +220,7 @@
 }
 
 .page:has(.activities) {
-  grid-template-columns: minmax(280px, 480px) minmax(0, 1fr);
+  grid-template-columns: min(480px, calc((100% - 24px) / 2)) minmax(0, 1fr);
 }
 
 .column {
@@ -241,7 +249,7 @@
 .categoryList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   min-height: 0;
   margin: 0;
   padding: 0 16px 16px 0;
@@ -252,7 +260,7 @@
 .categoryGroup {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .category {
@@ -294,7 +302,7 @@
 .activityTitle {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -323,7 +331,7 @@
   height: 24px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   background-color: transparent;
   color: var(--text-primary);
   font-size: 20px;
@@ -354,10 +362,10 @@
 
 .activityMenuDropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 2;
-  min-width: 180px;
+  min-width: 184px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
@@ -439,7 +447,7 @@
   height: 24px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   background-color: transparent;
   color: inherit;
   font-size: 20px;
@@ -470,10 +478,10 @@
 
 .categoryMenuDropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 2;
-  min-width: 180px;
+  min-width: 184px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
@@ -505,14 +513,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding: 16px 16px;
 }
 
 .activitiesHeading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -558,10 +566,10 @@
 
 .addDropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 2;
-  min-width: 180px;
+  min-width: 184px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
@@ -602,8 +610,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  max-width: 220px;
-  padding: 4px 10px;
+  max-width: 224px;
+  padding: 8px 16px;
   border: 1px solid var(--surface);
   border-radius: 8px;
   background-color: var(--foreground);
@@ -635,7 +643,7 @@
   width: 8px;
   height: 8px;
   flex-shrink: 0;
-  margin-right: 4px;
+  margin-right: 8px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: translateY(-2px) rotate(45deg);
@@ -652,11 +660,11 @@
 
 .placeList {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 4;
   width: max-content;
-  min-width: 220px;
+  min-width: 224px;
   max-width: 280px;
   max-height: 240px;
   margin: 0;
@@ -676,7 +684,7 @@
 .placeOption,
 .placeOption:hover {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 16px;
   overflow: hidden;
   border: none;
   border-radius: 8px;
@@ -736,7 +744,7 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   background-color: transparent;
   color: var(--text-primary);
   font-size: 16px;
@@ -754,7 +762,7 @@
 .placeOptionRow:focus-within .stopMenuTrigger:hover,
 .stopMenu[open] .stopMenuTrigger:hover {
   width: 24px;
-  margin-right: 4px;
+  margin-right: 8px;
   opacity: 1;
 }
 
@@ -772,10 +780,10 @@
 
 .stopMenuDropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 3;
-  min-width: 140px;
+  min-width: 144px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
@@ -807,14 +815,72 @@
   .page,
   .page:has(.activities) {
     height: auto;
+    max-height: none;
     min-height: 100vh;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
+    align-content: start;
     padding: 16px;
     overflow: visible;
   }
 
   .header {
     grid-column: 1;
+  }
+
+  .column,
+  .side {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .activities {
+    flex: none;
+    overflow: visible;
+  }
+
+  .categoryList {
+    width: 100%;
+    padding-right: 0;
+    overflow: visible;
+  }
+
+  .mapPanel {
+    height: 480px;
+  }
+
+  .placeSelect {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .placeTrigger,
+  .placeTrigger:hover {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .header {
+    flex-direction: column;
+    align-items: center;
+    row-gap: 16px;
+  }
+
+  .titleRow {
+    max-width: 100%;
+    justify-content: center;
+  }
+
+  .title {
+    font-size: 24px;
+    line-height: 32px;
+    text-align: center;
+  }
+
+  .controls {
+    justify-content: center;
   }
 }

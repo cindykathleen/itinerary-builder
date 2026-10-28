@@ -1,3 +1,6 @@
+"use client";
+
+import { useRef } from "react";
 import Link from "next/link";
 import ItineraryCreate from "./ItineraryCreate";
 import styles from "./ItinerariesSidebar.module.css";
@@ -15,6 +18,9 @@ export default function ItinerariesSidebar({
 }: {
   currentStatus: ItineraryListStatus;
 }) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const current = filters.find((filter) => filter.status === currentStatus) ?? filters[0];
+
   return (
     <aside className={styles.sidebar}>
       <ItineraryCreate variant="secondary" idPrefix="sidebar-create" />
@@ -32,6 +38,31 @@ export default function ItinerariesSidebar({
             </li>
           ))}
         </ul>
+
+        <details ref={menuRef} className={styles.menu}>
+          <summary className={styles.trigger}>
+            <span className={styles.triggerLabel}>{current.label}</span>
+            <span className={styles.chevron} aria-hidden="true" />
+          </summary>
+          <ul className={styles.menuList}>
+            {filters.map((filter) => (
+              <li key={filter.status}>
+                <Link
+                  href={filter.href}
+                  className={styles.option}
+                  aria-current={currentStatus === filter.status ? "page" : undefined}
+                  onClick={() => {
+                    if (filter.status === currentStatus) {
+                      menuRef.current?.removeAttribute("open");
+                    }
+                  }}
+                >
+                  {filter.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
       </nav>
     </aside>
   );
