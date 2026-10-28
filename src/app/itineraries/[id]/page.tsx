@@ -4,6 +4,7 @@ import { executeGraphQL } from "@/lib/graphql/execute";
 import { ActivityHighlightProvider } from "./ActivityHighlight";
 import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
+import ItineraryMap from "./ItineraryMap";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
 import ItineraryTimeline from "./ItineraryTimeline";
 import ItineraryViewToggle from "./ItineraryViewToggle";
@@ -35,6 +36,14 @@ const itineraryQuery = /* GraphQL */ `
       stops {
         id
         name
+      }
+      googlePlaces {
+        id
+        name
+        address
+        latitude
+        longitude
+        color
       }
       activities {
         id
@@ -79,6 +88,14 @@ type ItineraryQuery = {
     stops: {
       id: string;
       name: string;
+    }[];
+    googlePlaces: {
+      id: string;
+      name: string;
+      address: string;
+      latitude: number;
+      longitude: number;
+      color: string;
     }[];
     activities: {
       id: string;
@@ -183,7 +200,19 @@ export default async function ItineraryPage({
           activities={sidebarItems}
         />
       ) : (
-        <section className={styles.side} aria-label="Map" />
+        <section className={`${styles.side} ${styles.mapPanel}`} aria-label="Map">
+          <ItineraryMap
+            apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
+            places={itinerary.googlePlaces.map((place) => ({
+              id: place.id,
+              name: place.name,
+              address: place.address,
+              latitude: Number(place.latitude),
+              longitude: Number(place.longitude),
+              color: place.color,
+            }))}
+          />
+        </section>
       )}
 
       {itinerary.scheduleConfigured ? (

@@ -273,6 +273,7 @@ export const schema = createSchema({
       daySettings: [ItineraryDay!]!
       categories: [Category!]!
       stops: [Stop!]!
+      googlePlaces: [ItineraryPlace!]!
       activities: [Activity!]!
     }
 
@@ -292,6 +293,15 @@ export const schema = createSchema({
     type Stop {
       id: ID!
       name: String!
+    }
+
+    type ItineraryPlace {
+      id: ID!
+      name: String!
+      address: String!
+      latitude: Float!
+      longitude: Float!
+      color: String!
     }
 
     type Activity {
@@ -420,6 +430,36 @@ export const schema = createSchema({
            FROM stops
            WHERE itinerary_id = $1
            ORDER BY position, created_at, name`,
+          [parent.id],
+        );
+
+        return result.rows;
+      },
+      googlePlaces: async (parent: { id: string }) => {
+        const result = await pool.query<{
+          id: string;
+          name: string;
+          address: string;
+          latitude: number;
+          longitude: number;
+          color: string;
+        }>(
+          `SELECT id, name, address, latitude, longitude, color
+           FROM (
+             SELECT DISTINCT ON (places.id)
+                    places.id,
+                    places.name,
+                    places.address,
+                    places.latitude,
+                    places.longitude,
+                    COALESCE(categories.color, '#E0E6ED') AS color
+             FROM places
+             JOIN activities ON activities.place_id = places.id
+             LEFT JOIN categories ON categories.id = activities.category_id
+             WHERE places.itinerary_id = $1
+             ORDER BY places.id, activities.created_at
+           ) linked_places
+           ORDER BY name`,
           [parent.id],
         );
 

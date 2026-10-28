@@ -138,7 +138,7 @@ export default function GooglePlaceField({
           {fromSearch ? (
             <input type="hidden" name="sessionToken" value={sessionToken.current} />
           ) : null}
-          <span>
+          <span className={dialogStyles.googlePlaceText}>
             <span className={dialogStyles.googlePlaceName}>{selected.name}</span>
             {selected.address ? (
               <span className={dialogStyles.googlePlaceAddress}>{selected.address}</span>
