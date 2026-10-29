@@ -280,7 +280,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: 0 8px 8px 0;
 }
 
 .activityList {
@@ -298,6 +298,12 @@
   gap: 8px;
   margin: 0;
   padding: 8px 16px;
+}
+
+.activity:hover,
+.activity:focus-within {
+  border-radius: 0 8px 8px 0;
+  background-color: var(--background);
 }
 
 .activityBody {
@@ -561,6 +567,13 @@
   line-height: 1;
   list-style: none;
   cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.add:hover,
+.add:focus-visible,
+.addMenu[open] .add {
+  color: var(--primary);
 }
 
 .add::-webkit-details-marker {
@@ -623,7 +636,7 @@
   gap: 16px;
   max-width: 224px;
   padding: 8px 16px;
-  border: 1px solid var(--surface);
+  border: 1px solid var(--primary);
   border-radius: 8px;
   background-color: var(--foreground);
   color: var(--primary);
