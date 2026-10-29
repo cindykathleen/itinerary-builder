@@ -162,8 +162,120 @@
   box-shadow: 0 0 0 2px var(--primary);
 }
 
+.block:hover,
+.block:focus-within {
+  z-index: 3;
+  overflow: visible;
+}
+
 .block:active {
   cursor: grabbing;
+}
+
+.blockNoted {
+  border-top-right-radius: 0;
+}
+
+.noteMark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 16px 16px 0;
+  border-color: transparent currentColor transparent transparent;
+  pointer-events: none;
+}
+
+.blockNote {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: calc(100% + 2px);
+  display: none;
+  width: max-content;
+  max-width: 300px;
+  min-width: 300px;
+  padding: 8px 16px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background-color: var(--foreground);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  text-align: left;
+  overflow-wrap: break-word;
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  cursor: text;
+}
+
+.blockNote::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 2px;
+}
+
+.blockNoteLeft {
+  right: calc(100% + 2px);
+  left: auto;
+}
+
+.blockNoteLeft::before {
+  right: auto;
+  left: 100%;
+}
+
+.blockNoteSizer {
+  display: block;
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.blockNoteField {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  resize: none;
+  overflow: hidden;
+  cursor: text;
+  user-select: text;
+  touch-action: auto;
+}
+
+.block:active .blockNoteField {
+  cursor: text;
+}
+
+.blockNoteField:focus {
+  outline: none;
+}
+
+.block:hover .blockNote,
+.block:focus-within .blockNote {
+  display: block;
+}
+
+.blockMoving .blockNote {
+  display: none;
 }
 
 .blockName {

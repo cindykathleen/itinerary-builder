@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
-import { deleteActivity, scheduleActivity, unscheduleActivity } from "../actions";
+import { deleteActivity, scheduleActivity, unscheduleActivity, updateActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
 import ActivityEditDialog, { type EditableActivity } from "./ActivityEditDialog";
@@ -362,6 +362,159 @@ function boundaryIndex(time: string | null, slots: number[]) {
   }
 
   return -1;
+}
+
+function BlockNote({
+  activity,
+  dayIndex,
+  onPlace,
+  onCommit,
+}: {
+  activity: TimelineActivity;
+  dayIndex: number;
+  onPlace: (block: HTMLDivElement) => void;
+  onCommit: (activity: TimelineActivity, note: string) => void;
+}) {
+  const note = activity.note ?? "";
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const onPlaceRef = useRef(onPlace);
+  const revertRef = useRef(false);
+  const savedRef = useRef(note);
+  const commitRef = useRef<(raw: string) => void>(() => {});
+  const [value, setValue] = useState(note);
+
+  useEffect(() => {
+    savedRef.current = note;
+
+    if (document.activeElement === fieldRef.current) {
+      return;
+    }
+
+    setValue(note);
+  }, [note]);
+
+  useEffect(() => {
+    const commitOnOutsidePointer = (event: PointerEvent) => {
+      const field = fieldRef.current;
+
+      if (!field || document.activeElement !== field) {
+        return;
+      }
+
+      if (event.target instanceof Node && field.parentElement?.contains(event.target)) {
+        return;
+      }
+
+      commitRef.current(field.value);
+      field.blur();
+      event.preventDefault();
+      event.stopPropagation();
+
+      const swallow = (followup: Event) => {
+        followup.preventDefault();
+        followup.stopPropagation();
+      };
+      const followups = ["mousedown", "pointerup", "mouseup", "click"] as const;
+
+      for (const type of followups) {
+        document.addEventListener(type, swallow, true);
+      }
+
+      const release = () => {
+        for (const type of followups) {
+          document.removeEventListener(type, swallow, true);
+        }
+      };
+
+      document.addEventListener("pointerup", () => setTimeout(release, 0), { capture: true, once: true });
+      document.addEventListener("pointercancel", () => setTimeout(release, 0), { capture: true, once: true });
+    };
+
+    document.addEventListener("pointerdown", commitOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", commitOnOutsidePointer, true);
+  }, []);
+
+  commitRef.current = (raw: string) => {
+    if (revertRef.current) {
+      return;
+    }
+
+    const next = raw.trim();
+
+    if (next === savedRef.current.trim()) {
+      return;
+    }
+
+    savedRef.current = next;
+    onCommit(activity, next);
+  };
+
+  useLayoutEffect(() => {
+    onPlaceRef.current = onPlace;
+  }, [onPlace]);
+
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    const block = field?.closest(`.${styles.block}`);
+
+    if (!(block instanceof HTMLDivElement) || !field) {
+      return;
+    }
+
+    if (document.activeElement === field || block.matches(":hover")) {
+      onPlaceRef.current(block);
+    }
+  }, [value]);
+
+  return (
+    <div
+      className={styles.blockNote}
+      role="tooltip"
+      data-no-drag
+      onPointerDown={(event) => {
+        event.stopPropagation();
+
+        if (event.target === event.currentTarget) {
+          fieldRef.current?.focus();
+        }
+      }}
+    >
+      <span className={styles.blockNoteSizer} aria-hidden="true">
+        {value}
+        {"\u200b"}
+      </span>
+      <textarea
+        ref={fieldRef}
+        id={`activity-note-${activity.id}-${dayIndex}`}
+        className={styles.blockNoteField}
+        aria-label={`Note for ${activity.name}`}
+        data-no-drag
+        value={value}
+        onPointerDown={(event) => event.stopPropagation()}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={(event) => {
+          if (revertRef.current) {
+            revertRef.current = false;
+            setValue(note);
+            return;
+          }
+
+          commitRef.current(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          revertRef.current = true;
+          setValue(note);
+          event.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
 }
 
 export default function ItineraryTimeline({
@@ -735,6 +888,72 @@ export default function ItineraryTimeline({
       inSidebar: activity.inSidebar,
     });
     setEditToken((token) => token + 1);
+  };
+
+  const placeBlockNote = (block: HTMLDivElement) => {
+    const note = block.querySelector<HTMLElement>(`.${styles.blockNote}`);
+    const timeline = timelineRef.current;
+
+    if (!note || !timeline) {
+      return;
+    }
+
+    const wasHidden = getComputedStyle(note).display === "none";
+
+    if (wasHidden) {
+      note.style.display = "block";
+      note.style.visibility = "hidden";
+    }
+
+    const noteWidth = note.getBoundingClientRect().width;
+
+    if (wasHidden) {
+      note.style.display = "";
+      note.style.visibility = "";
+    }
+
+    const blockRect = block.getBoundingClientRect();
+    const timelineRect = timeline.getBoundingClientRect();
+    const visibleRight = timelineRect.left + timeline.clientWidth;
+    const fitsRight = blockRect.right + 2 + noteWidth <= visibleRight;
+    note.classList.toggle(styles.blockNoteLeft, !fitsRight);
+  };
+
+  const saveActivityNote = async (activity: TimelineActivity, note: string) => {
+    const next = note.trim();
+
+    if ((activity.note?.trim() ?? "") === next) {
+      return;
+    }
+
+    const previous = items;
+    setItems((currentItems) =>
+      currentItems.map((item) => (item.id === activity.id ? { ...item, note: next || null } : item)),
+    );
+
+    const formData = new FormData();
+    formData.set("itineraryId", itineraryId);
+    formData.set("id", activity.id);
+    formData.set("name", activity.name);
+    formData.set("note", next);
+
+    if (activity.categoryId) {
+      formData.set("categoryId", activity.categoryId);
+    }
+
+    if (activity.stopId) {
+      formData.set("stopId", activity.stopId);
+    }
+
+    if (activity.googlePlaceId) {
+      formData.set("googlePlaceId", activity.googlePlaceId);
+    }
+
+    try {
+      await updateActivity(formData);
+    } catch {
+      setItems(previous);
+    }
   };
 
   const movePlacedActivity = (activity: TimelineActivity, event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1257,24 +1476,30 @@ export default function ItineraryTimeline({
               return null;
             }
 
+            const note = activity.note?.trim() ?? "";
+
             return (
               <div
                 key={`${activity.id}-${slice.dayIndex}`}
                 data-activity-id={activity.id}
                 className={[
                   styles.block,
+                  note ? styles.blockNoted : "",
                   movePreview?.id === activity.id ? styles.blockMoving : "",
                   hoveredId === activity.id ? styles.blockHighlighted : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 aria-label={activity.name}
+                aria-describedby={note ? `activity-note-${activity.id}-${slice.dayIndex}` : undefined}
                 style={{
                   gridColumn: slice.dayIndex + 2,
                   gridRow: `${startIndex + 2} / ${endIndex + 2}`,
                   backgroundColor: activity.color,
                   color: categoryTextColor(activity.color) ?? "var(--text-primary)",
                 }}
+                onPointerEnter={(event) => placeBlockNote(event.currentTarget)}
+                onFocusCapture={(event) => placeBlockNote(event.currentTarget)}
                 onPointerDown={(event) => {
                   if (event.button !== 0 || (event.target as HTMLElement).closest("[data-no-drag]")) {
                     return;
@@ -1320,6 +1545,15 @@ export default function ItineraryTimeline({
                 <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
                   {activity.name}
                 </span>
+                {note ? <span className={styles.noteMark} aria-hidden="true" /> : null}
+                {note ? (
+                  <BlockNote
+                    activity={activity}
+                    dayIndex={slice.dayIndex}
+                    onPlace={placeBlockNote}
+                    onCommit={saveActivityNote}
+                  />
+                ) : null}
                 <button
                   className={styles.blockDelete}
                   type="button"
