@@ -4,6 +4,12 @@
   border: 1px solid var(--surface);
   border-radius: 16px;
   background-color: var(--foreground);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
 }
 
 .header {
@@ -32,6 +38,11 @@
   color: var(--text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.titleLink:hover,
+.card:has(.cover:hover) .titleLink {
+  color: var(--primary);
 }
 
 .cover {
