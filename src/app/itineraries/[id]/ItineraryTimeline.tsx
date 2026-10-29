@@ -629,6 +629,7 @@ export default function ItineraryTimeline({
   const confirmRef = useRef<HTMLDialogElement>(null);
   const createRef = useRef<HTMLDialogElement>(null);
   const draggedIdRef = useRef<string | null>(null);
+  const addUnscheduledRef = useRef<(id: string) => void>(() => {});
   const [items, setItems] = useState(activities);
   const [overKeys, setOverKeys] = useState<string[]>([]);
   const [pointerKey, setPointerKey] = useState<string | null>(null);
@@ -719,11 +720,20 @@ export default function ItineraryTimeline({
       setDropBlocked(false);
       setOverKeys([]);
     };
+    const addToItinerary = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+
+      if (id) {
+        addUnscheduledRef.current(id);
+      }
+    };
     window.addEventListener("dragstart", rememberDrag);
     window.addEventListener("dragend", stopDragging);
+    window.addEventListener("activity-add-to-itinerary", addToItinerary);
     return () => {
       window.removeEventListener("dragstart", rememberDrag);
       window.removeEventListener("dragend", stopDragging);
+      window.removeEventListener("activity-add-to-itinerary", addToItinerary);
     };
   }, []);
 
@@ -914,6 +924,49 @@ export default function ItineraryTimeline({
       await scheduleActivity({ itineraryId, id, ...placement });
     } catch {
       setItems(previous);
+    }
+  };
+
+  addUnscheduledRef.current = (id: string) => {
+    const activity = items.find((item) => item.id === id);
+
+    if (!activity || activity.startDate) {
+      return;
+    }
+
+    const starts = days.flatMap((day, dayIndex) =>
+      slots.map((minutes) => ({
+        date: day.iso,
+        startTime: minutesToTime(minutes),
+        absolute: dayIndex * DAY_MINUTES + minutes,
+      })),
+    );
+    const occupiedUntil = items.reduce((latest, item) => {
+      if (!item.startDate || !item.endTime) {
+        return latest;
+      }
+
+      const endMinutes = toMinutes(item.endTime);
+      const dayIndex = days.findIndex((day) => day.iso === item.startDate);
+
+      if (endMinutes === null || dayIndex < 0) {
+        return latest;
+      }
+
+      return Math.max(latest, dayIndex * DAY_MINUTES + endMinutes);
+    }, -1);
+    const slot =
+      starts.find(
+        (start) =>
+          start.absolute >= occupiedUntil &&
+          scheduledRange(activity, start.date, start.startTime, dayEnd, timeInterval, days),
+      ) ??
+      starts.find((start) =>
+        scheduledRange(activity, start.date, start.startTime, dayEnd, timeInterval, days),
+      );
+
+    if (slot) {
+      void placeActivity(activity.id, slot.date, slot.startTime);
     }
   };
 

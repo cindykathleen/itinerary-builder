@@ -214,6 +214,48 @@
   line-height: 24px;
 }
 
+.mapPopupActivities {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mapPopupActivity {
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.mapPopupActivityScheduled {
+  opacity: 0.4;
+}
+
+.mapPopupAdd {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background-color: var(--primary);
+  color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.mapPopupAdd:hover,
+.mapPopupAdd:focus-visible {
+  border-color: var(--primary-hover);
+  background-color: var(--primary-hover);
+  color: #ffffff;
+}
+
 .mapStatus,
 .mapNote {
   position: absolute;

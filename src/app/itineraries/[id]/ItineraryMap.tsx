@@ -5,6 +5,12 @@ import { useActivityHighlight } from "./ActivityHighlight";
 import { loadGoogleMaps } from "./load-google-maps";
 import styles from "./page.module.css";
 
+export type MapActivity = {
+  id: string;
+  name: string;
+  onTimeline: boolean;
+};
+
 export type MapPlace = {
   id: string;
   googlePlaceId: string;
@@ -14,6 +20,7 @@ export type MapPlace = {
   longitude: number;
   color: string;
   activityIds: string[];
+  activities: MapActivity[];
 };
 
 const TEXT_PRIMARY = "#1A202C";
@@ -58,10 +65,19 @@ type GoogleBounds = {
 
 type GoogleMarker = {
   map: GoogleMap | null;
+  title: string;
   addListener: (event: string, handler: () => void) => void;
 };
 
+type GooglePin = {
+  element: HTMLElement;
+  background: string;
+  borderColor: string;
+  glyphColor: string;
+};
+
 type GoogleInfoWindow = {
+  close: () => void;
   setContent: (content: HTMLElement) => void;
   setHeaderContent: (content: HTMLElement) => void;
   open: (options: { map: GoogleMap; anchor: GoogleMarker }) => void;
@@ -84,17 +100,95 @@ type MarkerLibrary = {
     borderColor: string;
     glyphColor: string;
     scale: number;
-  }) => { element: HTMLElement };
+  }) => GooglePin;
 };
 
-function markerContent(place: MapPlace) {
+function placeOnTimeline(place: MapPlace) {
+  return place.activities.length > 0 && place.activities.every((activity) => activity.onTimeline);
+}
+
+function pinColors(place: MapPlace) {
+  if (placeOnTimeline(place)) {
+    return {
+      background: place.color,
+      borderColor: pinBorderColor(place.color),
+      glyphColor: pinGlyphColor(place.color),
+    };
+  }
+
+  return {
+    background: WHITE,
+    borderColor: pinBorderColor(place.color),
+    glyphColor: pinBorderColor(place.color),
+  };
+}
+
+function pinTitle(place: MapPlace) {
+  const scheduled = place.activities.filter((activity) => activity.onTimeline).length;
+
+  if (scheduled === 0) {
+    return `${place.name}, not on the timeline`;
+  }
+
+  if (scheduled === place.activities.length) {
+    return `${place.name}, on the timeline`;
+  }
+
+  return place.name;
+}
+
+function paintPin(pin: GooglePin, marker: GoogleMarker, place: MapPlace) {
+  const colors = pinColors(place);
+  pin.background = colors.background;
+  pin.borderColor = colors.borderColor;
+  pin.glyphColor = colors.glyphColor;
+  pin.element.dataset.onTimeline = placeOnTimeline(place) ? "true" : "false";
+  marker.title = pinTitle(place);
+}
+
+function markerContent(place: MapPlace, onAdd: (activityId: string) => void) {
   const name = document.createElement("h4");
+  const body = document.createElement("div");
   const address = document.createElement("p");
   name.className = styles.mapPopupTitle;
   address.className = styles.mapPopupAddress;
   name.textContent = place.name;
   address.textContent = place.address;
-  return { name, address };
+  body.append(address);
+
+  if (place.activities.length > 0) {
+    const list = document.createElement("ul");
+    list.className = styles.mapPopupActivities;
+
+    for (const activity of place.activities) {
+      const item = document.createElement("li");
+
+      if (activity.onTimeline) {
+        item.className = `${styles.mapPopupActivity} ${styles.mapPopupActivityScheduled}`;
+        item.textContent = activity.name;
+      } else {
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = `primary ${styles.mapPopupAdd}`;
+        add.textContent = "Add to itinerary";
+        add.setAttribute("aria-label", `Add ${activity.name} to itinerary`);
+        add.addEventListener("pointerdown", (event) => event.stopPropagation());
+        add.addEventListener("mousedown", (event) => event.stopPropagation());
+        add.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onAdd(activity.id);
+        });
+        item.append(add);
+      }
+
+      list.append(item);
+    }
+
+    body.append(list);
+  }
+
+  return { name, body };
 }
 
 export default function ItineraryMap({
@@ -106,7 +200,10 @@ export default function ItineraryMap({
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMap | null>(null);
-  const markersRef = useRef(new Map<string, { element: HTMLElement; position: GoogleLatLng }>());
+  const markersRef = useRef(
+    new Map<string, { element: HTMLElement; position: GoogleLatLng; pin: GooglePin; marker: GoogleMarker }>(),
+  );
+  const placesRef = useRef(places);
   const hoverPlaceRef = useRef<(placeId: string | null) => void>(() => {});
   const highlight = useActivityHighlight();
   const [error, setError] = useState("");
@@ -115,6 +212,7 @@ export default function ItineraryMap({
     .map((place) => `${place.id}:${place.latitude}:${place.longitude}:${place.color}`)
     .join("|");
 
+  placesRef.current = places;
   hoverPlaceRef.current = highlight?.setHoveredPlaceId ?? (() => {});
 
   useEffect(() => {
@@ -163,21 +261,23 @@ export default function ItineraryMap({
         const infoWindow = new maps.InfoWindow();
         const bounds = new LatLngBounds();
 
-        for (const place of places) {
+        for (const place of placesRef.current) {
           const position = { lat: place.latitude, lng: place.longitude };
+          const colors = pinColors(place);
           const pin = new markerLibrary.PinElement({
-            background: place.color,
-            borderColor: pinBorderColor(place.color),
-            glyphColor: pinGlyphColor(place.color),
+            background: colors.background,
+            borderColor: colors.borderColor,
+            glyphColor: colors.glyphColor,
             scale: 1.15,
           });
           pin.element.classList.add(styles.mapPin);
           const marker = new markerLibrary.AdvancedMarkerElement({
             map,
             position,
-            title: place.name,
+            title: pinTitle(place),
             content: pin.element,
           });
+          paintPin(pin, marker, place);
           const showPlace = () => hoverPlaceRef.current(place.googlePlaceId);
           const hidePlace = () => hoverPlaceRef.current(null);
           pin.element.addEventListener("mouseenter", showPlace);
@@ -188,13 +288,23 @@ export default function ItineraryMap({
           });
 
           marker.addListener("click", () => {
-            const content = markerContent(place);
+            const current =
+              placesRef.current.find((item) => item.googlePlaceId === place.googlePlaceId) ?? place;
+            const content = markerContent(current, (activityId) => {
+              window.dispatchEvent(new CustomEvent("activity-add-to-itinerary", { detail: activityId }));
+              infoWindow.close();
+            });
             infoWindow.setHeaderContent(content.name);
-            infoWindow.setContent(content.address);
+            infoWindow.setContent(content.body);
             infoWindow.open({ map, anchor: marker });
           });
           markers.push(marker);
-          markersRef.current.set(place.googlePlaceId, { element: pin.element, position });
+          markersRef.current.set(place.googlePlaceId, {
+            element: pin.element,
+            position,
+            pin,
+            marker,
+          });
           bounds.extend(position);
         }
 
@@ -211,10 +321,12 @@ export default function ItineraryMap({
         mapRef.current = map;
         setMapReady((ready) => ready + 1);
 
-        if (places.length === 1) {
-          map.setCenter({ lat: places[0].latitude, lng: places[0].longitude });
+        const placed = placesRef.current;
+
+        if (placed.length === 1) {
+          map.setCenter({ lat: placed[0].latitude, lng: placed[0].longitude });
           map.setZoom(14);
-        } else if (places.length > 1) {
+        } else if (placed.length > 1) {
           map.fitBounds(bounds, 48);
         }
       })
@@ -238,7 +350,17 @@ export default function ItineraryMap({
         marker.map = null;
       }
     };
-  }, [apiKey, placeKey, places]);
+  }, [apiKey, placeKey]);
+
+  useEffect(() => {
+    for (const place of places) {
+      const record = markersRef.current.get(place.googlePlaceId);
+
+      if (record) {
+        paintPin(record.pin, record.marker, place);
+      }
+    }
+  }, [mapReady, places]);
 
   useEffect(() => {
     const activePlaceId =

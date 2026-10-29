@@ -205,18 +205,32 @@ export default async function ItineraryPage({
         <section className={`${styles.side} ${styles.mapPanel}`} aria-label="Map">
           <ItineraryMap
             apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
-            places={itinerary.googlePlaces.map((place) => ({
-              id: place.id,
-              googlePlaceId: place.googlePlaceId,
-              name: place.name,
-              address: place.address,
-              latitude: Number(place.latitude),
-              longitude: Number(place.longitude),
-              color: place.color,
-              activityIds: itinerary.activities
+            places={itinerary.googlePlaces.map((place) => {
+              const activities = itinerary.activities
                 .filter((activity) => activity.googlePlaceId === place.googlePlaceId)
-                .map((activity) => activity.id),
-            }))}
+                .map((activity) => ({
+                  id: activity.id,
+                  name: activity.name,
+                  onTimeline: Boolean(activity.startDate && activity.startTime && activity.endTime),
+                }))
+                .sort(
+                  (left, right) =>
+                    Number(left.onTimeline) - Number(right.onTimeline) ||
+                    left.name.localeCompare(right.name),
+                );
+
+              return {
+                id: place.id,
+                googlePlaceId: place.googlePlaceId,
+                name: place.name,
+                address: place.address,
+                latitude: Number(place.latitude),
+                longitude: Number(place.longitude),
+                color: place.color,
+                activityIds: activities.map((activity) => activity.id),
+                activities,
+              };
+            })}
           />
         </section>
       )}
