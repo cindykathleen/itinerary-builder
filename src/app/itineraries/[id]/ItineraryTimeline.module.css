@@ -34,11 +34,6 @@
   pointer-events: none;
 }
 
-.dragging .cellOver {
-  position: relative;
-  z-index: 2;
-}
-
 .corner,
 .time {
   position: sticky;
@@ -134,7 +129,7 @@
 
 .block {
   position: relative;
-  z-index: 1;
+  z-index: calc(1 + var(--overlap, 0));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -144,7 +139,7 @@
   padding: 0 8px;
   overflow: hidden;
   border-radius: 8px;
-  cursor: grab;
+  cursor: pointer;
   font-size: 16px;
   font-weight: 400;
   line-height: 24px;
@@ -153,9 +148,15 @@
   transition: box-shadow 0.12s ease;
 }
 
+.blockOverlap {
+  box-shadow:
+    0 0 0 1px var(--foreground),
+    0 1px 4px rgba(26, 32, 44, 0.16);
+}
+
 .blockMoving,
 .blockHighlighted {
-  z-index: 2;
+  z-index: 12;
 }
 
 .blockHighlighted {
@@ -164,12 +165,8 @@
 
 .block:hover,
 .block:focus-within {
-  z-index: 3;
+  z-index: 13;
   overflow: visible;
-}
-
-.block:active {
-  cursor: grabbing;
 }
 
 .blockNoted {

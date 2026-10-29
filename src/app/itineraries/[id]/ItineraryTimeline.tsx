@@ -35,8 +35,6 @@ type TimelineDay = {
   label: string;
 };
 
-const DOUBLE_CLICK_MS = 500;
-
 const WEEKDAYS = [
   "Sunday",
   "Monday",
@@ -199,7 +197,10 @@ type ActivityFrame = {
   endClock: number;
 };
 
-function activityFrame(activity: TimelineActivity, dayList: TimelineDay[]): ActivityFrame | null {
+function activityFrame(
+  activity: Pick<TimelineActivity, "startDate" | "startTime" | "endTime">,
+  dayList: TimelineDay[],
+): ActivityFrame | null {
   if (!activity.startDate || !activity.startTime || !activity.endTime) {
     return null;
   }
@@ -241,18 +242,97 @@ function daySlices(frame: ActivityFrame, dayStartMinutes: number, dayEndBoundary
   return slices;
 }
 
-function slicesOverlap(
-  left: { dayIndex: number; startMinutes: number; endMinutes: number }[],
-  right: { dayIndex: number; startMinutes: number; endMinutes: number }[],
+type OverlapPlacement = {
+  column: number;
+  columns: number;
+};
+
+function layoutOverlaps(
+  activities: TimelineActivity[],
+  dayList: TimelineDay[],
+  dayStartMinutes: number,
+  dayEndBoundary: number,
 ) {
-  return left.some((slice) =>
-    right.some(
-      (other) =>
-        slice.dayIndex === other.dayIndex &&
-        slice.startMinutes < other.endMinutes &&
-        other.startMinutes < slice.endMinutes,
-    ),
-  );
+  const byDay = new Map<number, { id: string; start: number; end: number }[]>();
+
+  for (const activity of activities) {
+    const frame = activityFrame(activity, dayList);
+
+    if (!frame) {
+      continue;
+    }
+
+    for (const slice of daySlices(frame, dayStartMinutes, dayEndBoundary)) {
+      const group = byDay.get(slice.dayIndex) ?? [];
+      group.push({ id: activity.id, start: slice.startMinutes, end: slice.endMinutes });
+      byDay.set(slice.dayIndex, group);
+    }
+  }
+
+  const placements = new Map<string, OverlapPlacement>();
+
+  for (const [dayIndex, group] of byDay) {
+    const events = [...group].sort(
+      (left, right) => left.start - right.start || right.end - left.end || left.id.localeCompare(right.id),
+    );
+    let cluster: typeof events = [];
+    let clusterEnd = -1;
+
+    const assign = (members: typeof events) => {
+      const columnEnds: number[] = [];
+      const columns: number[] = [];
+
+      for (const event of members) {
+        let column = columnEnds.findIndex((end) => end <= event.start);
+
+        if (column < 0) {
+          column = columnEnds.length;
+          columnEnds.push(event.end);
+        } else {
+          columnEnds[column] = event.end;
+        }
+
+        columns.push(column);
+      }
+
+      const count = columnEnds.length;
+
+      members.forEach((event, index) => {
+        placements.set(`${event.id}:${dayIndex}`, { column: columns[index], columns: count });
+      });
+    };
+
+    for (const event of events) {
+      if (cluster.length > 0 && event.start >= clusterEnd) {
+        assign(cluster);
+        cluster = [];
+        clusterEnd = -1;
+      }
+
+      cluster.push(event);
+      clusterEnd = Math.max(clusterEnd, event.end);
+    }
+
+    assign(cluster);
+  }
+
+  return placements;
+}
+
+function overlapBox(placement: OverlapPlacement | undefined) {
+  if (!placement || placement.columns <= 1) {
+    return {};
+  }
+
+  const offset = Math.min(placement.column * 10, 30);
+
+  return {
+    width: `calc(${100 - offset}% - 4px)`,
+    marginLeft: `calc(${offset}% + 2px)`,
+    marginRight: 2,
+    justifySelf: "start" as const,
+    "--overlap": placement.column,
+  };
 }
 
 function scheduledRange(
@@ -288,52 +368,6 @@ function scheduledRange(
   return { date, startTime, endTime: minutesToTime(extraDays * DAY_MINUTES + endClock) };
 }
 
-function placementConflicts(
-  activities: TimelineActivity[],
-  id: string,
-  placement: { date: string; startTime: string; endTime: string },
-  dayList: TimelineDay[],
-  dayStartMinutes: number,
-  dayEndBoundary: number,
-) {
-  const next = activityFrame(
-    {
-      id,
-      name: "",
-      color: "",
-      note: null,
-      categoryId: null,
-      stopId: null,
-      googlePlaceId: null,
-      googlePlaceName: null,
-      googlePlaceAddress: null,
-      inSidebar: true,
-      startDate: placement.date,
-      startTime: placement.startTime,
-      endTime: placement.endTime,
-    },
-    dayList,
-  );
-
-  if (!next) {
-    return true;
-  }
-
-  const nextSlices = daySlices(next, dayStartMinutes, dayEndBoundary);
-
-  return activities.some((activity) => {
-    if (activity.id === id) {
-      return false;
-    }
-
-    const frame = activityFrame(activity, dayList);
-
-    return frame
-      ? slicesOverlap(nextSlices, daySlices(frame, dayStartMinutes, dayEndBoundary))
-      : false;
-  });
-}
-
 function boundaryIndex(time: string | null, slots: number[]) {
   if (!time) {
     return -1;
@@ -362,6 +396,45 @@ function boundaryIndex(time: string | null, slots: number[]) {
   }
 
   return -1;
+}
+
+function placementCellKeys(
+  placement: { date: string; startTime: string; endTime: string },
+  dayList: TimelineDay[],
+  dayStartMinutes: number,
+  dayEndBoundary: number,
+  slotList: number[],
+) {
+  const frame = activityFrame(
+    {
+      startDate: placement.date,
+      startTime: placement.startTime,
+      endTime: placement.endTime,
+    },
+    dayList,
+  );
+
+  if (!frame) {
+    return [];
+  }
+
+  const keys: string[] = [];
+
+  for (const slice of daySlices(frame, dayStartMinutes, dayEndBoundary)) {
+    const day = dayList[slice.dayIndex];
+    const startIndex = slotList.indexOf(slice.startMinutes);
+    const endIndex = boundaryIndex(minutesToTime(slice.endMinutes), slotList);
+
+    if (!day || startIndex < 0 || endIndex <= startIndex) {
+      continue;
+    }
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+      keys.push(`${day.iso}|${slotList[index]}`);
+    }
+  }
+
+  return keys;
 }
 
 function BlockNote({
@@ -556,9 +629,8 @@ export default function ItineraryTimeline({
   const confirmRef = useRef<HTMLDialogElement>(null);
   const createRef = useRef<HTMLDialogElement>(null);
   const draggedIdRef = useRef<string | null>(null);
-  const blockPressRef = useRef<{ id: string; time: number; x: number; y: number } | null>(null);
   const [items, setItems] = useState(activities);
-  const [overKey, setOverKey] = useState<string | null>(null);
+  const [overKeys, setOverKeys] = useState<string[]>([]);
   const [pointerKey, setPointerKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dropBlocked, setDropBlocked] = useState(false);
@@ -575,11 +647,18 @@ export default function ItineraryTimeline({
   const [draft, setDraft] = useState<{ date: string; startIndex: number; endIndex: number } | null>(null);
   const highlight = useActivityHighlight();
   const hoveredId = highlight?.hoveredId ?? null;
-  const axisKey = overKey ?? (dragging ? null : pointerKey);
+  const axisKey = overKeys[0] ?? (dragging ? null : pointerKey);
   const axisSeparator = axisKey?.indexOf("|") ?? -1;
   const axisDate = axisKey && axisSeparator >= 0 ? axisKey.slice(0, axisSeparator) : null;
-  const axisMinutes =
-    axisKey && axisSeparator >= 0 ? Number(axisKey.slice(axisSeparator + 1)) : Number.NaN;
+  const axisMinutes = new Set<number>();
+
+  if (overKeys.length > 0) {
+    for (const key of overKeys) {
+      axisMinutes.add(Number(key.slice(key.indexOf("|") + 1)));
+    }
+  } else if (axisSeparator >= 0 && axisKey) {
+    axisMinutes.add(Number(axisKey.slice(axisSeparator + 1)));
+  }
 
   useEffect(() => {
     setItems(activities);
@@ -635,7 +714,7 @@ export default function ItineraryTimeline({
       timelineRef.current?.classList.remove(styles.dragging);
       setDragging(false);
       setDropBlocked(false);
-      setOverKey(null);
+      setOverKeys([]);
     };
     window.addEventListener("dragstart", rememberDrag);
     window.addEventListener("dragend", stopDragging);
@@ -660,56 +739,16 @@ export default function ItineraryTimeline({
   const dayStartMinutes = toMinutes(dayStart) ?? slots[0] ?? 0;
   const dayEndBoundary = slots.length > 0 ? boundaryMinutes(slots.length) : 0;
 
-  const slotTaken = (date: string, minutes: number) => {
-    const finish = minutes + timeInterval;
-    const dayIndex = days.findIndex((day) => day.iso === date);
-
-    return items.some((activity) => {
-      const frame = activityFrame(activity, days);
-
-      if (!frame) {
-        return false;
-      }
-
-      return daySlices(frame, dayStartMinutes, dayEndBoundary).some(
-        (slice) =>
-          slice.dayIndex === dayIndex &&
-          minutes < slice.endMinutes &&
-          finish > slice.startMinutes,
-      );
-    });
-  };
-
-  const selectionRange = (date: string, anchorIndex: number, pointerIndex: number) => {
+  const selectionRange = (anchorIndex: number, pointerIndex: number) => {
     if (pointerIndex >= anchorIndex) {
-      let far = anchorIndex;
-
-      for (let index = anchorIndex; index <= pointerIndex; index += 1) {
-        if (slotTaken(date, slots[index])) {
-          break;
-        }
-
-        far = index;
-      }
-
-      return { startIndex: anchorIndex, endIndex: far + 1 };
+      return { startIndex: anchorIndex, endIndex: pointerIndex + 1 };
     }
 
-    let far = anchorIndex;
-
-    for (let index = anchorIndex; index >= pointerIndex; index -= 1) {
-      if (slotTaken(date, slots[index])) {
-        break;
-      }
-
-      far = index;
-    }
-
-    return { startIndex: far, endIndex: anchorIndex + 1 };
+    return { startIndex: pointerIndex, endIndex: anchorIndex + 1 };
   };
 
   const beginCreate = (event: ReactPointerEvent<HTMLDivElement>, day: TimelineDay, minutes: number) => {
-    if (event.button !== 0 || slotTaken(day.iso, minutes)) {
+    if (event.button !== 0) {
       return;
     }
 
@@ -792,7 +831,7 @@ export default function ItineraryTimeline({
         }
       }
 
-      selection = selectionRange(day.iso, anchorIndex, slotIndexAt(pointerEvent.clientY));
+      selection = selectionRange(anchorIndex, slotIndexAt(pointerEvent.clientY));
       setDraft({ date: day.iso, ...selection });
     };
 
@@ -833,7 +872,7 @@ export default function ItineraryTimeline({
       ? scheduledRange(activity, date, startTime, dayEnd, timeInterval, days)
       : null;
 
-    return placement !== null && !placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary);
+    return placement !== null;
   };
 
   const placeActivity = async (id: string, date: string, startTime: string) => {
@@ -842,7 +881,7 @@ export default function ItineraryTimeline({
       ? scheduledRange(current, date, startTime, dayEnd, timeInterval, days)
       : null;
 
-    if (!current || !placement || placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary)) {
+    if (!current || !placement) {
       return;
     }
 
@@ -975,7 +1014,6 @@ export default function ItineraryTimeline({
         }
 
         moved = true;
-        blockPressRef.current = null;
         timelineRef.current?.classList.add(styles.dragging);
         setDragging(true);
       }
@@ -1029,9 +1067,9 @@ export default function ItineraryTimeline({
         days,
       );
 
-      if (!placement || placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
+      if (!placement) {
         next = null;
-        setOverKey(null);
+        setOverKeys([]);
         setMovePreview(null);
         setDropBlocked(true);
         return;
@@ -1039,21 +1077,29 @@ export default function ItineraryTimeline({
 
       next = placement;
       setDropBlocked(false);
-      setOverKey(`${placement.date}|${toMinutes(placement.startTime)}`);
+      setOverKeys(placementCellKeys(placement, days, dayStartMinutes, dayEndBoundary, slots));
       setMovePreview({ id: activity.id, ...placement });
     };
 
-    const onUp = () => {
+    const onUp = (pointerEvent: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       timelineRef.current?.classList.remove(styles.dragging);
       setDragging(false);
       setDropBlocked(false);
-      setOverKey(null);
+      setOverKeys([]);
       setMovePreview(null);
 
-      if (!moved || !next) {
+      if (!moved) {
+        if (pointerEvent.type === "pointerup") {
+          editPlacedActivity(activity);
+        }
+
+        return;
+      }
+
+      if (!next) {
         return;
       }
 
@@ -1190,10 +1236,6 @@ export default function ItineraryTimeline({
         endTime,
       };
 
-      if (placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
-        return;
-      }
-
       nextStart = candidateStart;
       nextEnd = candidateEnd;
       setItems((current) =>
@@ -1300,6 +1342,22 @@ export default function ItineraryTimeline({
     }
   };
 
+  const overlapLayout = layoutOverlaps(
+    items.map((activity) =>
+      movePreview?.id === activity.id
+        ? {
+            ...activity,
+            startDate: movePreview.date,
+            startTime: movePreview.startTime,
+            endTime: movePreview.endTime,
+          }
+        : activity,
+    ),
+    days,
+    dayStartMinutes,
+    dayEndBoundary,
+  );
+
   return (
     <section
       ref={timelineRef}
@@ -1342,7 +1400,7 @@ export default function ItineraryTimeline({
         {slots.map((minutes, row) => (
           <div
             key={minutes}
-            className={[styles.time, axisMinutes === minutes ? styles.axis : ""].filter(Boolean).join(" ")}
+            className={[styles.time, axisMinutes.has(minutes) ? styles.axis : ""].filter(Boolean).join(" ")}
             style={{ gridColumn: 1, gridRow: row + 2 }}
           >
             {formatTime(minutes, timeFormat)}
@@ -1361,7 +1419,7 @@ export default function ItineraryTimeline({
                   styles.cell,
                   column === 0 ? styles.cellFirst : "",
                   canDrop ? styles.cellClickable : "",
-                  overKey === key ? styles.cellOver : "",
+                  overKeys.includes(key) ? styles.cellOver : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -1379,15 +1437,29 @@ export default function ItineraryTimeline({
                   canDrop
                     ? (event) => {
                         const id = draggedIdRef.current;
+                        const activity = id ? items.find((item) => item.id === id) : undefined;
+                        const placement =
+                          activity && hasDragType(event.dataTransfer, "text/plain")
+                            ? scheduledRange(
+                                activity,
+                                day.iso,
+                                minutesToTime(minutes),
+                                dayEnd,
+                                timeInterval,
+                                days,
+                              )
+                            : null;
 
-                        if (!id || !hasDragType(event.dataTransfer, "text/plain") || !canPlace(id, day.iso, minutesToTime(minutes))) {
-                          setOverKey(null);
+                        if (!activity || !placement) {
+                          setOverKeys([]);
                           setDropBlocked(true);
                           return;
                         }
 
                         setDropBlocked(false);
-                        setOverKey(key);
+                        setOverKeys(
+                          placementCellKeys(placement, days, dayStartMinutes, dayEndBoundary, slots),
+                        );
                       }
                     : undefined
                 }
@@ -1399,7 +1471,13 @@ export default function ItineraryTimeline({
                           return;
                         }
 
-                        setOverKey((currentKey) => (currentKey === key ? null : currentKey));
+                        const next = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+                        const nextKey =
+                          next?.dataset.date && next.dataset.minutes
+                            ? `${next.dataset.date}|${next.dataset.minutes}`
+                            : null;
+
+                        setOverKeys((current) => (nextKey && current.includes(nextKey) ? current : []));
                       }
                     : undefined
                 }
@@ -1407,7 +1485,7 @@ export default function ItineraryTimeline({
                   canDrop
                     ? (event) => {
                         event.preventDefault();
-                        setOverKey(null);
+                        setOverKeys([]);
                         const id = event.dataTransfer.getData("text/plain");
 
                         if (!canPlace(id, day.iso, minutesToTime(minutes))) {
@@ -1477,6 +1555,7 @@ export default function ItineraryTimeline({
             }
 
             const note = activity.note?.trim() ?? "";
+            const overlap = overlapLayout.get(`${activity.id}:${slice.dayIndex}`);
 
             return (
               <div
@@ -1485,6 +1564,7 @@ export default function ItineraryTimeline({
                 className={[
                   styles.block,
                   note ? styles.blockNoted : "",
+                  overlap && overlap.columns > 1 ? styles.blockOverlap : "",
                   movePreview?.id === activity.id ? styles.blockMoving : "",
                   hoveredId === activity.id ? styles.blockHighlighted : "",
                 ]
@@ -1497,6 +1577,7 @@ export default function ItineraryTimeline({
                   gridRow: `${startIndex + 2} / ${endIndex + 2}`,
                   backgroundColor: activity.color,
                   color: categoryTextColor(activity.color) ?? "var(--text-primary)",
+                  ...overlapBox(overlap),
                 }}
                 onPointerEnter={(event) => placeBlockNote(event.currentTarget)}
                 onFocusCapture={(event) => placeBlockNote(event.currentTarget)}
@@ -1505,26 +1586,6 @@ export default function ItineraryTimeline({
                     return;
                   }
 
-                  const now = Date.now();
-                  const previous = blockPressRef.current;
-                  const isDoubleClick =
-                    previous?.id === activity.id &&
-                    now - previous.time <= DOUBLE_CLICK_MS &&
-                    Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 4;
-
-                  if (isDoubleClick) {
-                    blockPressRef.current = null;
-                    event.preventDefault();
-                    editPlacedActivity(activity);
-                    return;
-                  }
-
-                  blockPressRef.current = {
-                    id: activity.id,
-                    time: now,
-                    x: event.clientX,
-                    y: event.clientY,
-                  };
                   movePlacedActivity(activity, event);
                 }}
               >
