@@ -39,6 +39,7 @@ const itineraryQuery = /* GraphQL */ `
       }
       googlePlaces {
         id
+        googlePlaceId
         name
         address
         latitude
@@ -91,6 +92,7 @@ type ItineraryQuery = {
     }[];
     googlePlaces: {
       id: string;
+      googlePlaceId: string;
       name: string;
       address: string;
       latitude: number;
@@ -205,11 +207,15 @@ export default async function ItineraryPage({
             apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
             places={itinerary.googlePlaces.map((place) => ({
               id: place.id,
+              googlePlaceId: place.googlePlaceId,
               name: place.name,
               address: place.address,
               latitude: Number(place.latitude),
               longitude: Number(place.longitude),
               color: place.color,
+              activityIds: itinerary.activities
+                .filter((activity) => activity.googlePlaceId === place.googlePlaceId)
+                .map((activity) => activity.id),
             }))}
           />
         </section>

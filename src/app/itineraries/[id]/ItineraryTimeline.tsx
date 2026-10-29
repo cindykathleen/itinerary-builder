@@ -647,6 +647,7 @@ export default function ItineraryTimeline({
   const [draft, setDraft] = useState<{ date: string; startIndex: number; endIndex: number } | null>(null);
   const highlight = useActivityHighlight();
   const hoveredId = highlight?.hoveredId ?? null;
+  const hoveredPlaceId = highlight?.hoveredPlaceId ?? null;
   const axisKey = overKeys[0] ?? (dragging ? null : pointerKey);
   const axisSeparator = axisKey?.indexOf("|") ?? -1;
   const axisDate = axisKey && axisSeparator >= 0 ? axisKey.slice(0, axisSeparator) : null;
@@ -667,13 +668,15 @@ export default function ItineraryTimeline({
   useEffect(() => {
     const timeline = timelineRef.current;
 
-    if (!timeline || !hoveredId) {
+    if (!timeline || highlight?.source === "timeline") {
       return;
     }
 
-    const block = timeline.querySelector<HTMLElement>(
-      `[data-activity-id="${CSS.escape(hoveredId)}"]`,
-    );
+    const block = hoveredId
+      ? timeline.querySelector<HTMLElement>(`[data-activity-id="${CSS.escape(hoveredId)}"]`)
+      : hoveredPlaceId
+        ? timeline.querySelector<HTMLElement>(`[data-place-id="${CSS.escape(hoveredPlaceId)}"]`)
+        : null;
 
     if (!block) {
       return;
@@ -703,7 +706,7 @@ export default function ItineraryTimeline({
     if (top !== 0 || left !== 0) {
       timeline.scrollBy({ top, left });
     }
-  }, [hoveredId]);
+  }, [highlight?.source, hoveredId, hoveredPlaceId]);
 
   useEffect(() => {
     const rememberDrag = (event: DragEvent) => {
@@ -1566,12 +1569,16 @@ export default function ItineraryTimeline({
                   note ? styles.blockNoted : "",
                   overlap && overlap.columns > 1 ? styles.blockOverlap : "",
                   movePreview?.id === activity.id ? styles.blockMoving : "",
-                  hoveredId === activity.id ? styles.blockHighlighted : "",
+                  hoveredId === activity.id ||
+                  (hoveredPlaceId !== null && activity.googlePlaceId === hoveredPlaceId)
+                    ? styles.blockHighlighted
+                    : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 aria-label={activity.name}
                 aria-describedby={note ? `activity-note-${activity.id}-${slice.dayIndex}` : undefined}
+                data-place-id={activity.googlePlaceId ?? undefined}
                 style={{
                   gridColumn: slice.dayIndex + 2,
                   gridRow: `${startIndex + 2} / ${endIndex + 2}`,
@@ -1579,7 +1586,11 @@ export default function ItineraryTimeline({
                   color: categoryTextColor(activity.color) ?? "var(--text-primary)",
                   ...overlapBox(overlap),
                 }}
-                onPointerEnter={(event) => placeBlockNote(event.currentTarget)}
+                onPointerEnter={(event) => {
+                  placeBlockNote(event.currentTarget);
+                  highlight?.setHoveredId(activity.id, "timeline");
+                }}
+                onPointerLeave={() => highlight?.setHoveredId(null, "timeline")}
                 onFocusCapture={(event) => placeBlockNote(event.currentTarget)}
                 onPointerDown={(event) => {
                   if (event.button !== 0 || (event.target as HTMLElement).closest("[data-no-drag]")) {

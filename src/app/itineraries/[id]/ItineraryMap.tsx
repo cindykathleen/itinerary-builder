@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useActivityHighlight } from "./ActivityHighlight";
 import { loadGoogleMaps } from "./load-google-maps";
 import styles from "./page.module.css";
 
 export type MapPlace = {
   id: string;
+  googlePlaceId: string;
   name: string;
   address: string;
   latitude: number;
   longitude: number;
   color: string;
+  activityIds: string[];
 };
 
 const TEXT_PRIMARY = "#1A202C";
@@ -43,6 +46,8 @@ type GoogleLatLng = {
 
 type GoogleMap = {
   fitBounds: (bounds: GoogleBounds, padding?: number) => void;
+  getZoom: () => number | undefined;
+  panTo: (position: GoogleLatLng) => void;
   setCenter: (position: GoogleLatLng) => void;
   setZoom: (zoom: number) => void;
 };
@@ -100,10 +105,17 @@ export default function ItineraryMap({
   places: MapPlace[];
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<GoogleMap | null>(null);
+  const markersRef = useRef(new Map<string, { element: HTMLElement; position: GoogleLatLng }>());
+  const hoverPlaceRef = useRef<(placeId: string | null) => void>(() => {});
+  const highlight = useActivityHighlight();
   const [error, setError] = useState("");
+  const [mapReady, setMapReady] = useState(0);
   const placeKey = places
     .map((place) => `${place.id}:${place.latitude}:${place.longitude}:${place.color}`)
     .join("|");
+
+  hoverPlaceRef.current = highlight?.setHoveredPlaceId ?? (() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -114,6 +126,7 @@ export default function ItineraryMap({
 
     let cancelled = false;
     const markers: GoogleMarker[] = [];
+    const markerCleanups: (() => void)[] = [];
     const previousAuthFailure = window.gm_authFailure;
 
     window.gm_authFailure = () => {
@@ -165,6 +178,14 @@ export default function ItineraryMap({
             title: place.name,
             content: pin.element,
           });
+          const showPlace = () => hoverPlaceRef.current(place.googlePlaceId);
+          const hidePlace = () => hoverPlaceRef.current(null);
+          pin.element.addEventListener("mouseenter", showPlace);
+          pin.element.addEventListener("mouseleave", hidePlace);
+          markerCleanups.push(() => {
+            pin.element.removeEventListener("mouseenter", showPlace);
+            pin.element.removeEventListener("mouseleave", hidePlace);
+          });
 
           marker.addListener("click", () => {
             const content = markerContent(place);
@@ -173,8 +194,22 @@ export default function ItineraryMap({
             infoWindow.open({ map, anchor: marker });
           });
           markers.push(marker);
+          markersRef.current.set(place.googlePlaceId, { element: pin.element, position });
           bounds.extend(position);
         }
+
+        if (cancelled) {
+          markersRef.current.clear();
+
+          for (const marker of markers) {
+            marker.map = null;
+          }
+
+          return;
+        }
+
+        mapRef.current = map;
+        setMapReady((ready) => ready + 1);
 
         if (places.length === 1) {
           map.setCenter({ lat: places[0].latitude, lng: places[0].longitude });
@@ -192,12 +227,43 @@ export default function ItineraryMap({
     return () => {
       cancelled = true;
       window.gm_authFailure = previousAuthFailure;
+      mapRef.current = null;
+      markersRef.current.clear();
+
+      for (const cleanup of markerCleanups) {
+        cleanup();
+      }
 
       for (const marker of markers) {
         marker.map = null;
       }
     };
   }, [apiKey, placeKey, places]);
+
+  useEffect(() => {
+    const activePlaceId =
+      highlight?.hoveredPlaceId ??
+      places.find((place) => highlight?.hoveredId && place.activityIds.includes(highlight.hoveredId))
+        ?.googlePlaceId ??
+      null;
+
+    for (const [placeId, marker] of markersRef.current) {
+      marker.element.classList.toggle(styles.mapPinActive, placeId === activePlaceId);
+    }
+
+    const map = mapRef.current;
+    const marker = activePlaceId ? markersRef.current.get(activePlaceId) : undefined;
+
+    if (!map || !marker || highlight?.source !== "timeline") {
+      return;
+    }
+
+    map.panTo(marker.position);
+
+    if ((map.getZoom() ?? 0) < 14) {
+      map.setZoom(14);
+    }
+  }, [highlight?.hoveredId, highlight?.hoveredPlaceId, highlight?.source, mapReady, places]);
 
   if (!apiKey) {
     return <p className={styles.mapStatus}>Google Maps is not configured.</p>;
