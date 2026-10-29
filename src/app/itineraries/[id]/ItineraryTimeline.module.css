@@ -83,6 +83,10 @@
   border-right: 1px solid var(--surface);
 }
 
+.axis {
+  background-color: color-mix(in srgb, var(--secondary) 45%, #ffffff);
+}
+
 .cell {
   border-bottom: 1px solid var(--surface);
   border-left: 1px solid var(--surface);
@@ -96,8 +100,18 @@
   cursor: pointer;
 }
 
+.cellClickable:hover {
+  background-color: color-mix(in srgb, var(--secondary) 45%, #ffffff);
+}
+
+.dragging .cellClickable:hover {
+  background-color: transparent;
+}
+
 .cellOver,
-.cellOver:hover {
+.cellOver:hover,
+.dragging .cellOver,
+.dragging .cellOver:hover {
   background-color: var(--secondary);
 }
 
@@ -169,8 +183,8 @@
 .blockDelete:hover {
   position: absolute;
   z-index: 2;
-  top: 0;
-  right: 0;
+  top: 8px;
+  right: 8px;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -195,15 +209,17 @@
 
 .resizeHandle {
   position: absolute;
-  right: 8px;
-  left: 8px;
-  height: 8px;
+  right: 12px;
+  left: 12px;
+  height: 12px;
   cursor: ns-resize;
   touch-action: none;
 }
 
 .resizeTop,
-.resizeBottom {
+.resizeBottom,
+.resizeLeft,
+.resizeRight {
   z-index: 1;
 }
 
@@ -219,7 +235,7 @@
 .resizeRight {
   top: 0;
   bottom: 0;
-  width: 8px;
+  width: 12px;
   height: auto;
   cursor: ew-resize;
 }

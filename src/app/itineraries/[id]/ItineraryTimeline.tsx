@@ -5,6 +5,7 @@ import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
 import { deleteActivity, scheduleActivity, unscheduleActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import ActivityEditDialog, { type EditableActivity } from "./ActivityEditDialog";
 import { useActivityHighlight } from "./ActivityHighlight";
 import ActivityCreate, { type ActivitySlot } from "./ActivityCreate";
 import { categoryTextColor } from "./CategoryItem";
@@ -17,6 +18,12 @@ type TimelineActivity = {
   id: string;
   name: string;
   color: string;
+  note: string | null;
+  categoryId: string | null;
+  stopId: string | null;
+  googlePlaceId: string | null;
+  googlePlaceName: string | null;
+  googlePlaceAddress: string | null;
   inSidebar: boolean;
   startDate: string | null;
   startTime: string | null;
@@ -27,6 +34,8 @@ type TimelineDay = {
   iso: string;
   label: string;
 };
+
+const DOUBLE_CLICK_MS = 500;
 
 const WEEKDAYS = [
   "Sunday",
@@ -292,6 +301,12 @@ function placementConflicts(
       id,
       name: "",
       color: "",
+      note: null,
+      categoryId: null,
+      stopId: null,
+      googlePlaceId: null,
+      googlePlaceName: null,
+      googlePlaceAddress: null,
       inSidebar: true,
       startDate: placement.date,
       startTime: placement.startTime,
@@ -388,8 +403,10 @@ export default function ItineraryTimeline({
   const confirmRef = useRef<HTMLDialogElement>(null);
   const createRef = useRef<HTMLDialogElement>(null);
   const draggedIdRef = useRef<string | null>(null);
+  const blockPressRef = useRef<{ id: string; time: number; x: number; y: number } | null>(null);
   const [items, setItems] = useState(activities);
   const [overKey, setOverKey] = useState<string | null>(null);
+  const [pointerKey, setPointerKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dropBlocked, setDropBlocked] = useState(false);
   const [movePreview, setMovePreview] = useState<{
@@ -399,10 +416,17 @@ export default function ItineraryTimeline({
     endTime: string;
   } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<TimelineActivity | null>(null);
+  const [editing, setEditing] = useState<EditableActivity | null>(null);
+  const [editToken, setEditToken] = useState(0);
   const [pendingCreate, setPendingCreate] = useState<ActivitySlot | null>(null);
   const [draft, setDraft] = useState<{ date: string; startIndex: number; endIndex: number } | null>(null);
   const highlight = useActivityHighlight();
   const hoveredId = highlight?.hoveredId ?? null;
+  const axisKey = overKey ?? (dragging ? null : pointerKey);
+  const axisSeparator = axisKey?.indexOf("|") ?? -1;
+  const axisDate = axisKey && axisSeparator >= 0 ? axisKey.slice(0, axisSeparator) : null;
+  const axisMinutes =
+    axisKey && axisSeparator >= 0 ? Number(axisKey.slice(axisSeparator + 1)) : Number.NaN;
 
   useEffect(() => {
     setItems(activities);
@@ -698,6 +722,21 @@ export default function ItineraryTimeline({
     }
   };
 
+  const editPlacedActivity = (activity: TimelineActivity) => {
+    setEditing({
+      id: activity.id,
+      name: activity.name,
+      note: activity.note,
+      googlePlaceId: activity.googlePlaceId,
+      googlePlaceName: activity.googlePlaceName,
+      googlePlaceAddress: activity.googlePlaceAddress,
+      categoryId: activity.categoryId,
+      stopId: activity.stopId,
+      inSidebar: activity.inSidebar,
+    });
+    setEditToken((token) => token + 1);
+  };
+
   const movePlacedActivity = (activity: TimelineActivity, event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest("[data-no-drag]")) {
       return;
@@ -717,6 +756,7 @@ export default function ItineraryTimeline({
         }
 
         moved = true;
+        blockPressRef.current = null;
         timelineRef.current?.classList.add(styles.dragging);
         setDragging(true);
       }
@@ -1066,7 +1106,11 @@ export default function ItineraryTimeline({
           <span className={styles.srOnly}>Time</span>
         </div>
         {days.map((day, column) => (
-          <div key={day.iso} className={styles.day} style={{ gridColumn: column + 2, gridRow: 1 }}>
+          <div
+            key={day.iso}
+            className={[styles.day, axisDate === day.iso ? styles.axis : ""].filter(Boolean).join(" ")}
+            style={{ gridColumn: column + 2, gridRow: 1 }}
+          >
             <DayHeader
               itineraryId={itineraryId}
               date={day.iso}
@@ -1079,7 +1123,7 @@ export default function ItineraryTimeline({
         {slots.map((minutes, row) => (
           <div
             key={minutes}
-            className={styles.time}
+            className={[styles.time, axisMinutes === minutes ? styles.axis : ""].filter(Boolean).join(" ")}
             style={{ gridColumn: 1, gridRow: row + 2 }}
           >
             {formatTime(minutes, timeFormat)}
@@ -1105,6 +1149,12 @@ export default function ItineraryTimeline({
                 style={{ gridColumn: column + 2, gridRow: row + 2 }}
                 data-date={canDrop ? day.iso : undefined}
                 data-minutes={canDrop ? minutes : undefined}
+                onPointerEnter={canDrop ? () => setPointerKey(key) : undefined}
+                onPointerLeave={
+                  canDrop
+                    ? () => setPointerKey((current) => (current === key ? null : current))
+                    : undefined
+                }
                 onPointerDown={canDrop ? (event) => beginCreate(event, day, minutes) : undefined}
                 onDragEnter={
                   canDrop
@@ -1225,7 +1275,33 @@ export default function ItineraryTimeline({
                   backgroundColor: activity.color,
                   color: categoryTextColor(activity.color) ?? "var(--text-primary)",
                 }}
-                onPointerDown={(event) => movePlacedActivity(activity, event)}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 || (event.target as HTMLElement).closest("[data-no-drag]")) {
+                    return;
+                  }
+
+                  const now = Date.now();
+                  const previous = blockPressRef.current;
+                  const isDoubleClick =
+                    previous?.id === activity.id &&
+                    now - previous.time <= DOUBLE_CLICK_MS &&
+                    Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 4;
+
+                  if (isDoubleClick) {
+                    blockPressRef.current = null;
+                    event.preventDefault();
+                    editPlacedActivity(activity);
+                    return;
+                  }
+
+                  blockPressRef.current = {
+                    id: activity.id,
+                    time: now,
+                    x: event.clientX,
+                    y: event.clientY,
+                  };
+                  movePlacedActivity(activity, event);
+                }}
               >
                 {first && days.length > 1 ? (
                   <span
@@ -1273,6 +1349,17 @@ export default function ItineraryTimeline({
           });
         })}
       </div>
+
+      {editing ? (
+        <ActivityEditDialog
+          key={editing.id}
+          itineraryId={itineraryId}
+          activity={editing}
+          categories={categories}
+          stops={stops}
+          openToken={editToken}
+        />
+      ) : null}
 
       <ActivityCreate
         itineraryId={itineraryId}

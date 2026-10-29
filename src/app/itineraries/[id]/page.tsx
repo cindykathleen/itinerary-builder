@@ -233,6 +233,12 @@ export default async function ItineraryPage({
           activities={itinerary.activities.map((activity) => ({
             id: activity.id,
             name: activity.name,
+            note: activity.note,
+            categoryId: activity.categoryId,
+            stopId: activity.stopId,
+            googlePlaceId: activity.googlePlaceId,
+            googlePlaceName: activity.googlePlaceName,
+            googlePlaceAddress: activity.googlePlaceAddress,
             color:
               categories.find((category) => category.id === activity.categoryId)?.color ??
               "#E0E6ED",

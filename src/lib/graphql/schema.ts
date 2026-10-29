@@ -415,6 +415,7 @@ export const schema = createSchema({
         stopId: ID
         googlePlaceId: String
         sessionToken: String
+        inSidebar: Boolean
       ): Activity!
       scheduleActivity(
         id: ID!
@@ -1552,6 +1553,7 @@ export const schema = createSchema({
           stopId?: string | null;
           googlePlaceId?: string | null;
           sessionToken?: string | null;
+          inSidebar?: boolean | null;
         },
         context: GraphQLContext,
       ) => {
@@ -1652,10 +1654,20 @@ export const schema = createSchema({
                category_id = $3,
                stop_id = $4,
                place_id = $5,
+               in_sidebar = CASE WHEN $8::boolean IS NULL THEN in_sidebar ELSE $8 END,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $6 AND itinerary_id = $7
            RETURNING id, name, note, category_id, stop_id`,
-          [name, note || null, categoryId, stopId, placeId, args.id, activityRow.itinerary_id],
+          [
+            name,
+            note || null,
+            categoryId,
+            stopId,
+            placeId,
+            args.id,
+            activityRow.itinerary_id,
+            typeof args.inSidebar === "boolean" ? args.inSidebar : null,
+          ],
         );
 
         const activity = result.rows[0];
