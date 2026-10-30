@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { categoriesForStop } from "@/lib/categories";
 import dialogStyles from "../dialog.module.css";
+
+export { categoriesForStop };
 
 export type CategoryOption = {
   id: string;
@@ -10,12 +13,6 @@ export type CategoryOption = {
   logistics: boolean;
   stopId: string | null;
 };
-
-export function categoriesForStop(categories: CategoryOption[], stopId: string) {
-  return categories.filter((category) =>
-    stopId === "" ? category.stopId === null : category.stopId === stopId,
-  );
-}
 
 const NONE_COLOR = "var(--surface)";
 

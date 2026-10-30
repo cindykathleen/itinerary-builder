@@ -2,6 +2,7 @@ import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import pool from "@/lib/db";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
+import { clockTime } from "@/lib/timeline";
 import type { GraphQLContext } from "./context";
 
 type ItineraryRow = {
@@ -17,20 +18,6 @@ type ItineraryRow = {
   photo_url: string | null;
   schedule_configured: boolean;
 };
-
-function clockTime(startDate: string | null, endDate: string | null, endTime: string | null) {
-  if (!startDate || !endDate || !endTime || endDate <= startDate) {
-    return endTime;
-  }
-
-  const [hours, minutes] = endTime.split(":").map(Number);
-  const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T00:00:00Z`);
-  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-  const total = days * 24 * 60 + hours * 60 + minutes;
-
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
 
 function toItinerary(row: ItineraryRow) {
   return {
