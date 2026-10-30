@@ -1619,7 +1619,6 @@ export default function ItineraryTimeline({
                 data-activity-id={activity.id}
                 className={[
                   styles.block,
-                  note ? styles.blockNoted : "",
                   overlap && overlap.columns > 1 ? styles.blockOverlap : "",
                   movePreview?.id === activity.id ? styles.blockMoving : "",
                   hoveredId === activity.id ||
@@ -1670,7 +1669,30 @@ export default function ItineraryTimeline({
                 <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
                   {activity.name}
                 </span>
-                {note ? <span className={styles.noteMark} aria-hidden="true" /> : null}
+                {note ? (
+                  <span className={styles.noteMark} aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none">
+                      <path
+                        d="M4 2.75h5.15L12.25 5.9V13.25H4V2.75Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9 2.75V6h3.25"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M6 8.25h4M6 10.5h2.75"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                ) : null}
                 {note ? (
                   <BlockNote
                     activity={activity}
