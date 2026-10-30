@@ -330,6 +330,7 @@ export const schema = createSchema({
 
     type ItineraryPlace {
       id: ID!
+      googlePlaceId: String!
       name: String!
       address: String!
       latitude: Float!
@@ -415,6 +416,7 @@ export const schema = createSchema({
         stopId: ID
         googlePlaceId: String
         sessionToken: String
+        inSidebar: Boolean
       ): Activity!
       scheduleActivity(
         id: ID!
@@ -471,16 +473,18 @@ export const schema = createSchema({
       googlePlaces: async (parent: { id: string }) => {
         const result = await pool.query<{
           id: string;
+          google_place_id: string;
           name: string;
           address: string;
           latitude: number;
           longitude: number;
           color: string;
         }>(
-          `SELECT id, name, address, latitude, longitude, color
+          `SELECT id, google_place_id, name, address, latitude, longitude, color
            FROM (
              SELECT DISTINCT ON (places.id)
                     places.id,
+                    places.google_place_id,
                     places.name,
                     places.address,
                     places.latitude,
@@ -496,7 +500,15 @@ export const schema = createSchema({
           [parent.id],
         );
 
-        return result.rows;
+        return result.rows.map((place) => ({
+          id: place.id,
+          googlePlaceId: place.google_place_id,
+          name: place.name,
+          address: place.address,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          color: place.color,
+        }));
       },
       activities: async (parent: { id: string }) => {
         const result = await pool.query<{
@@ -1552,6 +1564,7 @@ export const schema = createSchema({
           stopId?: string | null;
           googlePlaceId?: string | null;
           sessionToken?: string | null;
+          inSidebar?: boolean | null;
         },
         context: GraphQLContext,
       ) => {
@@ -1652,10 +1665,20 @@ export const schema = createSchema({
                category_id = $3,
                stop_id = $4,
                place_id = $5,
+               in_sidebar = CASE WHEN $8::boolean IS NULL THEN in_sidebar ELSE $8 END,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $6 AND itinerary_id = $7
            RETURNING id, name, note, category_id, stop_id`,
-          [name, note || null, categoryId, stopId, placeId, args.id, activityRow.itinerary_id],
+          [
+            name,
+            note || null,
+            categoryId,
+            stopId,
+            placeId,
+            args.id,
+            activityRow.itinerary_id,
+            typeof args.inSidebar === "boolean" ? args.inSidebar : null,
+          ],
         );
 
         const activity = result.rows[0];

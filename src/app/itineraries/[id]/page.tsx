@@ -39,6 +39,7 @@ const itineraryQuery = /* GraphQL */ `
       }
       googlePlaces {
         id
+        googlePlaceId
         name
         address
         latitude
@@ -91,6 +92,7 @@ type ItineraryQuery = {
     }[];
     googlePlaces: {
       id: string;
+      googlePlaceId: string;
       name: string;
       address: string;
       latitude: number;
@@ -203,14 +205,32 @@ export default async function ItineraryPage({
         <section className={`${styles.side} ${styles.mapPanel}`} aria-label="Map">
           <ItineraryMap
             apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
-            places={itinerary.googlePlaces.map((place) => ({
-              id: place.id,
-              name: place.name,
-              address: place.address,
-              latitude: Number(place.latitude),
-              longitude: Number(place.longitude),
-              color: place.color,
-            }))}
+            places={itinerary.googlePlaces.map((place) => {
+              const activities = itinerary.activities
+                .filter((activity) => activity.googlePlaceId === place.googlePlaceId)
+                .map((activity) => ({
+                  id: activity.id,
+                  name: activity.name,
+                  onTimeline: Boolean(activity.startDate && activity.startTime && activity.endTime),
+                }))
+                .sort(
+                  (left, right) =>
+                    Number(left.onTimeline) - Number(right.onTimeline) ||
+                    left.name.localeCompare(right.name),
+                );
+
+              return {
+                id: place.id,
+                googlePlaceId: place.googlePlaceId,
+                name: place.name,
+                address: place.address,
+                latitude: Number(place.latitude),
+                longitude: Number(place.longitude),
+                color: place.color,
+                activityIds: activities.map((activity) => activity.id),
+                activities,
+              };
+            })}
           />
         </section>
       )}
@@ -233,6 +253,12 @@ export default async function ItineraryPage({
           activities={itinerary.activities.map((activity) => ({
             id: activity.id,
             name: activity.name,
+            note: activity.note,
+            categoryId: activity.categoryId,
+            stopId: activity.stopId,
+            googlePlaceId: activity.googlePlaceId,
+            googlePlaceName: activity.googlePlaceName,
+            googlePlaceAddress: activity.googlePlaceAddress,
             color:
               categories.find((category) => category.id === activity.categoryId)?.color ??
               "#E0E6ED",

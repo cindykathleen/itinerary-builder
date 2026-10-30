@@ -30,8 +30,7 @@
   overflow: hidden;
 }
 
-.back,
-.back:hover {
+.back {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -47,6 +46,12 @@
   border-left: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: translateX(2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.back:hover .backIcon,
+.back:focus-visible .backIcon {
+  transform: translateX(-4px) rotate(45deg);
 }
 
 .title {
@@ -89,18 +94,24 @@
   background-color: var(--surface);
 }
 
-.nav button,
-.nav button:hover {
+.nav button {
   font-family: inherit;
   color: var(--text-primary);
   background-color: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
   white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.nav button:hover,
+.nav button:focus-visible {
+  color: var(--primary);
 }
 
 .nav button[aria-pressed="true"],
-.nav button[aria-pressed="true"]:hover {
+.nav button[aria-pressed="true"]:hover,
+.nav button[aria-pressed="true"]:focus-visible {
   color: #ffffff;
   background-color: var(--primary);
   border-color: var(--primary);
@@ -124,6 +135,7 @@
 }
 
 .mapPin {
+  transform-origin: center bottom;
   filter:
     drop-shadow(1px 0 0 #fff)
     drop-shadow(-1px 0 0 #fff)
@@ -133,6 +145,18 @@
     drop-shadow(-1px -1px 0 #fff)
     drop-shadow(1px -1px 0 #fff)
     drop-shadow(-1px 1px 0 #fff)
+    drop-shadow(0 2px 4px rgba(26, 32, 44, 0.45));
+}
+
+.mapPinActive {
+  transform: scale(1.28);
+  filter:
+    drop-shadow(0 0 0 var(--primary))
+    drop-shadow(0 0 1px var(--primary))
+    drop-shadow(1px 0 0 #fff)
+    drop-shadow(-1px 0 0 #fff)
+    drop-shadow(0 1px 0 #fff)
+    drop-shadow(0 -1px 0 #fff)
     drop-shadow(0 2px 4px rgba(26, 32, 44, 0.45));
 }
 
@@ -188,6 +212,48 @@
 .mapPopupAddress {
   font-size: 16px;
   line-height: 24px;
+}
+
+.mapPopupActivities {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mapPopupActivity {
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.mapPopupActivityScheduled {
+  opacity: 0.4;
+}
+
+.mapPopupAdd {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background-color: var(--primary);
+  color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.mapPopupAdd:hover,
+.mapPopupAdd:focus-visible {
+  border-color: var(--primary-hover);
+  background-color: var(--primary-hover);
+  color: #ffffff;
 }
 
 .mapStatus,
@@ -269,7 +335,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: 0 8px 8px 0;
 }
 
 .activityList {
@@ -287,6 +353,12 @@
   gap: 8px;
   margin: 0;
   padding: 8px 16px;
+}
+
+.activity:hover,
+.activity:focus-within {
+  border-radius: 0 8px 8px 0;
+  background-color: var(--background);
 }
 
 .activityBody {
@@ -550,6 +622,13 @@
   line-height: 1;
   list-style: none;
   cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.add:hover,
+.add:focus-visible,
+.addMenu[open] .add {
+  color: var(--primary);
 }
 
 .add::-webkit-details-marker {
@@ -612,7 +691,7 @@
   gap: 16px;
   max-width: 224px;
   padding: 8px 16px;
-  border: 1px solid var(--surface);
+  border: 1px solid var(--primary);
   border-radius: 8px;
   background-color: var(--foreground);
   color: var(--primary);

@@ -16,7 +16,9 @@ export default function PublicNav({
           Itinerary Builder
         </Link>
         <nav className={styles.nav}>
-          <Link href="/sign-in">Sign In</Link>
+          <Link href="/sign-in" className={styles.signIn}>
+            Sign In
+          </Link>
           <Link href="/sign-up" className="primary">
             Sign Up
           </Link>

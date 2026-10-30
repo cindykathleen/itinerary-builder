@@ -29,6 +29,11 @@
   padding: 8px;
   border-radius: 999px;
   font-size: 16px;
+  transition: background-color 0.15s ease;
+}
+
+.link:hover {
+  background-color: color-mix(in srgb, var(--secondary) 45%, #ffffff);
 }
 
 .link::before {
@@ -40,7 +45,8 @@
   background-color: var(--text-primary);
 }
 
-.link[aria-current="page"] {
+.link[aria-current="page"],
+.link[aria-current="page"]:hover {
   background-color: var(--secondary);
 }
 

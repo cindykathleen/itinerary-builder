@@ -9,7 +9,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 16px;
   background-color: transparent;
   color: var(--text-primary);
   cursor: pointer;
@@ -19,9 +19,9 @@
 }
 
 .trigger:hover,
-.trigger:active,
-.trigger:focus {
-  background-color: transparent;
+.trigger:focus-visible,
+.menu[open] .trigger {
+  background-color: var(--foreground);
 }
 
 .trigger::-webkit-details-marker {

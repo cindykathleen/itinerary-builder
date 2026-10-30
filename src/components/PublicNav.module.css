@@ -23,6 +23,21 @@
   color: var(--primary);
   font-size: 32px;
   font-weight: 400;
+  transition: color 0.15s ease;
+}
+
+.brand:hover,
+.brand:focus-visible {
+  color: var(--primary-hover);
+}
+
+.signIn {
+  transition: color 0.15s ease;
+}
+
+.signIn:hover,
+.signIn:focus-visible {
+  color: var(--primary);
 }
 
 .nav {

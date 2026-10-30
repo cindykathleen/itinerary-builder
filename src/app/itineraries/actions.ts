@@ -376,6 +376,7 @@ const updateActivityMutation = /* GraphQL */ `
     $stopId: ID
     $googlePlaceId: String
     $sessionToken: String
+    $inSidebar: Boolean
   ) {
     updateActivity(
       id: $id
@@ -385,6 +386,7 @@ const updateActivityMutation = /* GraphQL */ `
       stopId: $stopId
       googlePlaceId: $googlePlaceId
       sessionToken: $sessionToken
+      inSidebar: $inSidebar
     ) {
       id
       name
@@ -404,6 +406,9 @@ export async function updateActivity(formData: FormData) {
   const stopId = String(formData.get("stopId") ?? "").trim();
   const googlePlaceId = String(formData.get("googlePlaceId") ?? "").trim();
   const sessionToken = String(formData.get("sessionToken") ?? "").trim();
+  const inSidebarValue = formData.get("inSidebar");
+  const inSidebar =
+    inSidebarValue === "true" ? true : inSidebarValue === "false" ? false : null;
 
   await executeGraphQL(updateActivityMutation, {
     id,
@@ -413,6 +418,7 @@ export async function updateActivity(formData: FormData) {
     stopId: stopId || null,
     googlePlaceId: googlePlaceId || null,
     sessionToken: sessionToken || null,
+    inSidebar,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }

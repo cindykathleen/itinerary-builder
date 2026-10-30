@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
-import { deleteActivity, scheduleActivity, unscheduleActivity } from "../actions";
+import { deleteActivity, scheduleActivity, unscheduleActivity, updateActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import ActivityEditDialog, { type EditableActivity } from "./ActivityEditDialog";
 import { useActivityHighlight } from "./ActivityHighlight";
 import ActivityCreate, { type ActivitySlot } from "./ActivityCreate";
 import { categoryTextColor } from "./CategoryItem";
@@ -17,6 +18,12 @@ type TimelineActivity = {
   id: string;
   name: string;
   color: string;
+  note: string | null;
+  categoryId: string | null;
+  stopId: string | null;
+  googlePlaceId: string | null;
+  googlePlaceName: string | null;
+  googlePlaceAddress: string | null;
   inSidebar: boolean;
   startDate: string | null;
   startTime: string | null;
@@ -190,7 +197,10 @@ type ActivityFrame = {
   endClock: number;
 };
 
-function activityFrame(activity: TimelineActivity, dayList: TimelineDay[]): ActivityFrame | null {
+function activityFrame(
+  activity: Pick<TimelineActivity, "startDate" | "startTime" | "endTime">,
+  dayList: TimelineDay[],
+): ActivityFrame | null {
   if (!activity.startDate || !activity.startTime || !activity.endTime) {
     return null;
   }
@@ -232,18 +242,97 @@ function daySlices(frame: ActivityFrame, dayStartMinutes: number, dayEndBoundary
   return slices;
 }
 
-function slicesOverlap(
-  left: { dayIndex: number; startMinutes: number; endMinutes: number }[],
-  right: { dayIndex: number; startMinutes: number; endMinutes: number }[],
+type OverlapPlacement = {
+  column: number;
+  columns: number;
+};
+
+function layoutOverlaps(
+  activities: TimelineActivity[],
+  dayList: TimelineDay[],
+  dayStartMinutes: number,
+  dayEndBoundary: number,
 ) {
-  return left.some((slice) =>
-    right.some(
-      (other) =>
-        slice.dayIndex === other.dayIndex &&
-        slice.startMinutes < other.endMinutes &&
-        other.startMinutes < slice.endMinutes,
-    ),
-  );
+  const byDay = new Map<number, { id: string; start: number; end: number }[]>();
+
+  for (const activity of activities) {
+    const frame = activityFrame(activity, dayList);
+
+    if (!frame) {
+      continue;
+    }
+
+    for (const slice of daySlices(frame, dayStartMinutes, dayEndBoundary)) {
+      const group = byDay.get(slice.dayIndex) ?? [];
+      group.push({ id: activity.id, start: slice.startMinutes, end: slice.endMinutes });
+      byDay.set(slice.dayIndex, group);
+    }
+  }
+
+  const placements = new Map<string, OverlapPlacement>();
+
+  for (const [dayIndex, group] of byDay) {
+    const events = [...group].sort(
+      (left, right) => left.start - right.start || right.end - left.end || left.id.localeCompare(right.id),
+    );
+    let cluster: typeof events = [];
+    let clusterEnd = -1;
+
+    const assign = (members: typeof events) => {
+      const columnEnds: number[] = [];
+      const columns: number[] = [];
+
+      for (const event of members) {
+        let column = columnEnds.findIndex((end) => end <= event.start);
+
+        if (column < 0) {
+          column = columnEnds.length;
+          columnEnds.push(event.end);
+        } else {
+          columnEnds[column] = event.end;
+        }
+
+        columns.push(column);
+      }
+
+      const count = columnEnds.length;
+
+      members.forEach((event, index) => {
+        placements.set(`${event.id}:${dayIndex}`, { column: columns[index], columns: count });
+      });
+    };
+
+    for (const event of events) {
+      if (cluster.length > 0 && event.start >= clusterEnd) {
+        assign(cluster);
+        cluster = [];
+        clusterEnd = -1;
+      }
+
+      cluster.push(event);
+      clusterEnd = Math.max(clusterEnd, event.end);
+    }
+
+    assign(cluster);
+  }
+
+  return placements;
+}
+
+function overlapBox(placement: OverlapPlacement | undefined) {
+  if (!placement || placement.columns <= 1) {
+    return {};
+  }
+
+  const offset = Math.min(placement.column * 10, 30);
+
+  return {
+    width: `calc(${100 - offset}% - 4px)`,
+    marginLeft: `calc(${offset}% + 2px)`,
+    marginRight: 2,
+    justifySelf: "start" as const,
+    "--overlap": placement.column,
+  };
 }
 
 function scheduledRange(
@@ -279,46 +368,6 @@ function scheduledRange(
   return { date, startTime, endTime: minutesToTime(extraDays * DAY_MINUTES + endClock) };
 }
 
-function placementConflicts(
-  activities: TimelineActivity[],
-  id: string,
-  placement: { date: string; startTime: string; endTime: string },
-  dayList: TimelineDay[],
-  dayStartMinutes: number,
-  dayEndBoundary: number,
-) {
-  const next = activityFrame(
-    {
-      id,
-      name: "",
-      color: "",
-      inSidebar: true,
-      startDate: placement.date,
-      startTime: placement.startTime,
-      endTime: placement.endTime,
-    },
-    dayList,
-  );
-
-  if (!next) {
-    return true;
-  }
-
-  const nextSlices = daySlices(next, dayStartMinutes, dayEndBoundary);
-
-  return activities.some((activity) => {
-    if (activity.id === id) {
-      return false;
-    }
-
-    const frame = activityFrame(activity, dayList);
-
-    return frame
-      ? slicesOverlap(nextSlices, daySlices(frame, dayStartMinutes, dayEndBoundary))
-      : false;
-  });
-}
-
 function boundaryIndex(time: string | null, slots: number[]) {
   if (!time) {
     return -1;
@@ -347,6 +396,198 @@ function boundaryIndex(time: string | null, slots: number[]) {
   }
 
   return -1;
+}
+
+function placementCellKeys(
+  placement: { date: string; startTime: string; endTime: string },
+  dayList: TimelineDay[],
+  dayStartMinutes: number,
+  dayEndBoundary: number,
+  slotList: number[],
+) {
+  const frame = activityFrame(
+    {
+      startDate: placement.date,
+      startTime: placement.startTime,
+      endTime: placement.endTime,
+    },
+    dayList,
+  );
+
+  if (!frame) {
+    return [];
+  }
+
+  const keys: string[] = [];
+
+  for (const slice of daySlices(frame, dayStartMinutes, dayEndBoundary)) {
+    const day = dayList[slice.dayIndex];
+    const startIndex = slotList.indexOf(slice.startMinutes);
+    const endIndex = boundaryIndex(minutesToTime(slice.endMinutes), slotList);
+
+    if (!day || startIndex < 0 || endIndex <= startIndex) {
+      continue;
+    }
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+      keys.push(`${day.iso}|${slotList[index]}`);
+    }
+  }
+
+  return keys;
+}
+
+function BlockNote({
+  activity,
+  dayIndex,
+  onPlace,
+  onCommit,
+}: {
+  activity: TimelineActivity;
+  dayIndex: number;
+  onPlace: (block: HTMLDivElement) => void;
+  onCommit: (activity: TimelineActivity, note: string) => void;
+}) {
+  const note = activity.note ?? "";
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const onPlaceRef = useRef(onPlace);
+  const revertRef = useRef(false);
+  const savedRef = useRef(note);
+  const commitRef = useRef<(raw: string) => void>(() => {});
+  const [value, setValue] = useState(note);
+
+  useEffect(() => {
+    savedRef.current = note;
+
+    if (document.activeElement === fieldRef.current) {
+      return;
+    }
+
+    setValue(note);
+  }, [note]);
+
+  useEffect(() => {
+    const commitOnOutsidePointer = (event: PointerEvent) => {
+      const field = fieldRef.current;
+
+      if (!field || document.activeElement !== field) {
+        return;
+      }
+
+      if (event.target instanceof Node && field.parentElement?.contains(event.target)) {
+        return;
+      }
+
+      commitRef.current(field.value);
+      field.blur();
+      event.preventDefault();
+      event.stopPropagation();
+
+      const swallow = (followup: Event) => {
+        followup.preventDefault();
+        followup.stopPropagation();
+      };
+      const followups = ["mousedown", "pointerup", "mouseup", "click"] as const;
+
+      for (const type of followups) {
+        document.addEventListener(type, swallow, true);
+      }
+
+      const release = () => {
+        for (const type of followups) {
+          document.removeEventListener(type, swallow, true);
+        }
+      };
+
+      document.addEventListener("pointerup", () => setTimeout(release, 0), { capture: true, once: true });
+      document.addEventListener("pointercancel", () => setTimeout(release, 0), { capture: true, once: true });
+    };
+
+    document.addEventListener("pointerdown", commitOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", commitOnOutsidePointer, true);
+  }, []);
+
+  commitRef.current = (raw: string) => {
+    if (revertRef.current) {
+      return;
+    }
+
+    const next = raw.trim();
+
+    if (next === savedRef.current.trim()) {
+      return;
+    }
+
+    savedRef.current = next;
+    onCommit(activity, next);
+  };
+
+  useLayoutEffect(() => {
+    onPlaceRef.current = onPlace;
+  }, [onPlace]);
+
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    const block = field?.closest(`.${styles.block}`);
+
+    if (!(block instanceof HTMLDivElement) || !field) {
+      return;
+    }
+
+    if (document.activeElement === field || block.matches(":hover")) {
+      onPlaceRef.current(block);
+    }
+  }, [value]);
+
+  return (
+    <div
+      className={styles.blockNote}
+      role="tooltip"
+      data-no-drag
+      onPointerDown={(event) => {
+        event.stopPropagation();
+
+        if (event.target === event.currentTarget) {
+          fieldRef.current?.focus();
+        }
+      }}
+    >
+      <span className={styles.blockNoteSizer} aria-hidden="true">
+        {value}
+        {"\u200b"}
+      </span>
+      <textarea
+        ref={fieldRef}
+        id={`activity-note-${activity.id}-${dayIndex}`}
+        className={styles.blockNoteField}
+        aria-label={`Note for ${activity.name}`}
+        data-no-drag
+        value={value}
+        onPointerDown={(event) => event.stopPropagation()}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={(event) => {
+          if (revertRef.current) {
+            revertRef.current = false;
+            setValue(note);
+            return;
+          }
+
+          commitRef.current(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          revertRef.current = true;
+          setValue(note);
+          event.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
 }
 
 export default function ItineraryTimeline({
@@ -388,8 +629,10 @@ export default function ItineraryTimeline({
   const confirmRef = useRef<HTMLDialogElement>(null);
   const createRef = useRef<HTMLDialogElement>(null);
   const draggedIdRef = useRef<string | null>(null);
+  const addUnscheduledRef = useRef<(id: string) => void>(() => {});
   const [items, setItems] = useState(activities);
-  const [overKey, setOverKey] = useState<string | null>(null);
+  const [overKeys, setOverKeys] = useState<string[]>([]);
+  const [pointerKey, setPointerKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dropBlocked, setDropBlocked] = useState(false);
   const [movePreview, setMovePreview] = useState<{
@@ -399,10 +642,25 @@ export default function ItineraryTimeline({
     endTime: string;
   } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<TimelineActivity | null>(null);
+  const [editing, setEditing] = useState<EditableActivity | null>(null);
+  const [editToken, setEditToken] = useState(0);
   const [pendingCreate, setPendingCreate] = useState<ActivitySlot | null>(null);
   const [draft, setDraft] = useState<{ date: string; startIndex: number; endIndex: number } | null>(null);
   const highlight = useActivityHighlight();
   const hoveredId = highlight?.hoveredId ?? null;
+  const hoveredPlaceId = highlight?.hoveredPlaceId ?? null;
+  const axisKey = overKeys[0] ?? (dragging ? null : pointerKey);
+  const axisSeparator = axisKey?.indexOf("|") ?? -1;
+  const axisDate = axisKey && axisSeparator >= 0 ? axisKey.slice(0, axisSeparator) : null;
+  const axisMinutes = new Set<number>();
+
+  if (overKeys.length > 0) {
+    for (const key of overKeys) {
+      axisMinutes.add(Number(key.slice(key.indexOf("|") + 1)));
+    }
+  } else if (axisSeparator >= 0 && axisKey) {
+    axisMinutes.add(Number(axisKey.slice(axisSeparator + 1)));
+  }
 
   useEffect(() => {
     setItems(activities);
@@ -411,13 +669,15 @@ export default function ItineraryTimeline({
   useEffect(() => {
     const timeline = timelineRef.current;
 
-    if (!timeline || !hoveredId) {
+    if (!timeline || highlight?.source === "timeline") {
       return;
     }
 
-    const block = timeline.querySelector<HTMLElement>(
-      `[data-activity-id="${CSS.escape(hoveredId)}"]`,
-    );
+    const block = hoveredId
+      ? timeline.querySelector<HTMLElement>(`[data-activity-id="${CSS.escape(hoveredId)}"]`)
+      : hoveredPlaceId
+        ? timeline.querySelector<HTMLElement>(`[data-place-id="${CSS.escape(hoveredPlaceId)}"]`)
+        : null;
 
     if (!block) {
       return;
@@ -447,7 +707,7 @@ export default function ItineraryTimeline({
     if (top !== 0 || left !== 0) {
       timeline.scrollBy({ top, left });
     }
-  }, [hoveredId]);
+  }, [highlight?.source, hoveredId, hoveredPlaceId]);
 
   useEffect(() => {
     const rememberDrag = (event: DragEvent) => {
@@ -458,13 +718,22 @@ export default function ItineraryTimeline({
       timelineRef.current?.classList.remove(styles.dragging);
       setDragging(false);
       setDropBlocked(false);
-      setOverKey(null);
+      setOverKeys([]);
+    };
+    const addToItinerary = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+
+      if (id) {
+        addUnscheduledRef.current(id);
+      }
     };
     window.addEventListener("dragstart", rememberDrag);
     window.addEventListener("dragend", stopDragging);
+    window.addEventListener("activity-add-to-itinerary", addToItinerary);
     return () => {
       window.removeEventListener("dragstart", rememberDrag);
       window.removeEventListener("dragend", stopDragging);
+      window.removeEventListener("activity-add-to-itinerary", addToItinerary);
     };
   }, []);
 
@@ -483,56 +752,16 @@ export default function ItineraryTimeline({
   const dayStartMinutes = toMinutes(dayStart) ?? slots[0] ?? 0;
   const dayEndBoundary = slots.length > 0 ? boundaryMinutes(slots.length) : 0;
 
-  const slotTaken = (date: string, minutes: number) => {
-    const finish = minutes + timeInterval;
-    const dayIndex = days.findIndex((day) => day.iso === date);
-
-    return items.some((activity) => {
-      const frame = activityFrame(activity, days);
-
-      if (!frame) {
-        return false;
-      }
-
-      return daySlices(frame, dayStartMinutes, dayEndBoundary).some(
-        (slice) =>
-          slice.dayIndex === dayIndex &&
-          minutes < slice.endMinutes &&
-          finish > slice.startMinutes,
-      );
-    });
-  };
-
-  const selectionRange = (date: string, anchorIndex: number, pointerIndex: number) => {
+  const selectionRange = (anchorIndex: number, pointerIndex: number) => {
     if (pointerIndex >= anchorIndex) {
-      let far = anchorIndex;
-
-      for (let index = anchorIndex; index <= pointerIndex; index += 1) {
-        if (slotTaken(date, slots[index])) {
-          break;
-        }
-
-        far = index;
-      }
-
-      return { startIndex: anchorIndex, endIndex: far + 1 };
+      return { startIndex: anchorIndex, endIndex: pointerIndex + 1 };
     }
 
-    let far = anchorIndex;
-
-    for (let index = anchorIndex; index >= pointerIndex; index -= 1) {
-      if (slotTaken(date, slots[index])) {
-        break;
-      }
-
-      far = index;
-    }
-
-    return { startIndex: far, endIndex: anchorIndex + 1 };
+    return { startIndex: pointerIndex, endIndex: anchorIndex + 1 };
   };
 
   const beginCreate = (event: ReactPointerEvent<HTMLDivElement>, day: TimelineDay, minutes: number) => {
-    if (event.button !== 0 || slotTaken(day.iso, minutes)) {
+    if (event.button !== 0) {
       return;
     }
 
@@ -615,7 +844,7 @@ export default function ItineraryTimeline({
         }
       }
 
-      selection = selectionRange(day.iso, anchorIndex, slotIndexAt(pointerEvent.clientY));
+      selection = selectionRange(anchorIndex, slotIndexAt(pointerEvent.clientY));
       setDraft({ date: day.iso, ...selection });
     };
 
@@ -656,7 +885,7 @@ export default function ItineraryTimeline({
       ? scheduledRange(activity, date, startTime, dayEnd, timeInterval, days)
       : null;
 
-    return placement !== null && !placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary);
+    return placement !== null;
   };
 
   const placeActivity = async (id: string, date: string, startTime: string) => {
@@ -665,7 +894,7 @@ export default function ItineraryTimeline({
       ? scheduledRange(current, date, startTime, dayEnd, timeInterval, days)
       : null;
 
-    if (!current || !placement || placementConflicts(items, id, placement, days, dayStartMinutes, dayEndBoundary)) {
+    if (!current || !placement) {
       return;
     }
 
@@ -693,6 +922,130 @@ export default function ItineraryTimeline({
 
     try {
       await scheduleActivity({ itineraryId, id, ...placement });
+    } catch {
+      setItems(previous);
+    }
+  };
+
+  addUnscheduledRef.current = (id: string) => {
+    const activity = items.find((item) => item.id === id);
+
+    if (!activity || activity.startDate) {
+      return;
+    }
+
+    const starts = days.flatMap((day, dayIndex) =>
+      slots.map((minutes) => ({
+        date: day.iso,
+        startTime: minutesToTime(minutes),
+        absolute: dayIndex * DAY_MINUTES + minutes,
+      })),
+    );
+    const occupiedUntil = items.reduce((latest, item) => {
+      if (!item.startDate || !item.endTime) {
+        return latest;
+      }
+
+      const endMinutes = toMinutes(item.endTime);
+      const dayIndex = days.findIndex((day) => day.iso === item.startDate);
+
+      if (endMinutes === null || dayIndex < 0) {
+        return latest;
+      }
+
+      return Math.max(latest, dayIndex * DAY_MINUTES + endMinutes);
+    }, -1);
+    const slot =
+      starts.find(
+        (start) =>
+          start.absolute >= occupiedUntil &&
+          scheduledRange(activity, start.date, start.startTime, dayEnd, timeInterval, days),
+      ) ??
+      starts.find((start) =>
+        scheduledRange(activity, start.date, start.startTime, dayEnd, timeInterval, days),
+      );
+
+    if (slot) {
+      void placeActivity(activity.id, slot.date, slot.startTime);
+    }
+  };
+
+  const editPlacedActivity = (activity: TimelineActivity) => {
+    setEditing({
+      id: activity.id,
+      name: activity.name,
+      note: activity.note,
+      googlePlaceId: activity.googlePlaceId,
+      googlePlaceName: activity.googlePlaceName,
+      googlePlaceAddress: activity.googlePlaceAddress,
+      categoryId: activity.categoryId,
+      stopId: activity.stopId,
+      inSidebar: activity.inSidebar,
+    });
+    setEditToken((token) => token + 1);
+  };
+
+  const placeBlockNote = (block: HTMLDivElement) => {
+    const note = block.querySelector<HTMLElement>(`.${styles.blockNote}`);
+    const timeline = timelineRef.current;
+
+    if (!note || !timeline) {
+      return;
+    }
+
+    const wasHidden = getComputedStyle(note).display === "none";
+
+    if (wasHidden) {
+      note.style.display = "block";
+      note.style.visibility = "hidden";
+    }
+
+    const noteWidth = note.getBoundingClientRect().width;
+
+    if (wasHidden) {
+      note.style.display = "";
+      note.style.visibility = "";
+    }
+
+    const blockRect = block.getBoundingClientRect();
+    const timelineRect = timeline.getBoundingClientRect();
+    const visibleRight = timelineRect.left + timeline.clientWidth;
+    const fitsRight = blockRect.right + 2 + noteWidth <= visibleRight;
+    note.classList.toggle(styles.blockNoteLeft, !fitsRight);
+  };
+
+  const saveActivityNote = async (activity: TimelineActivity, note: string) => {
+    const next = note.trim();
+
+    if ((activity.note?.trim() ?? "") === next) {
+      return;
+    }
+
+    const previous = items;
+    setItems((currentItems) =>
+      currentItems.map((item) => (item.id === activity.id ? { ...item, note: next || null } : item)),
+    );
+
+    const formData = new FormData();
+    formData.set("itineraryId", itineraryId);
+    formData.set("id", activity.id);
+    formData.set("name", activity.name);
+    formData.set("note", next);
+
+    if (activity.categoryId) {
+      formData.set("categoryId", activity.categoryId);
+    }
+
+    if (activity.stopId) {
+      formData.set("stopId", activity.stopId);
+    }
+
+    if (activity.googlePlaceId) {
+      formData.set("googlePlaceId", activity.googlePlaceId);
+    }
+
+    try {
+      await updateActivity(formData);
     } catch {
       setItems(previous);
     }
@@ -770,9 +1123,9 @@ export default function ItineraryTimeline({
         days,
       );
 
-      if (!placement || placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
+      if (!placement) {
         next = null;
-        setOverKey(null);
+        setOverKeys([]);
         setMovePreview(null);
         setDropBlocked(true);
         return;
@@ -780,21 +1133,29 @@ export default function ItineraryTimeline({
 
       next = placement;
       setDropBlocked(false);
-      setOverKey(`${placement.date}|${toMinutes(placement.startTime)}`);
+      setOverKeys(placementCellKeys(placement, days, dayStartMinutes, dayEndBoundary, slots));
       setMovePreview({ id: activity.id, ...placement });
     };
 
-    const onUp = () => {
+    const onUp = (pointerEvent: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       timelineRef.current?.classList.remove(styles.dragging);
       setDragging(false);
       setDropBlocked(false);
-      setOverKey(null);
+      setOverKeys([]);
       setMovePreview(null);
 
-      if (!moved || !next) {
+      if (!moved) {
+        if (pointerEvent.type === "pointerup") {
+          editPlacedActivity(activity);
+        }
+
+        return;
+      }
+
+      if (!next) {
         return;
       }
 
@@ -931,10 +1292,6 @@ export default function ItineraryTimeline({
         endTime,
       };
 
-      if (placementConflicts(items, activity.id, placement, days, dayStartMinutes, dayEndBoundary)) {
-        return;
-      }
-
       nextStart = candidateStart;
       nextEnd = candidateEnd;
       setItems((current) =>
@@ -1041,6 +1398,22 @@ export default function ItineraryTimeline({
     }
   };
 
+  const overlapLayout = layoutOverlaps(
+    items.map((activity) =>
+      movePreview?.id === activity.id
+        ? {
+            ...activity,
+            startDate: movePreview.date,
+            startTime: movePreview.startTime,
+            endTime: movePreview.endTime,
+          }
+        : activity,
+    ),
+    days,
+    dayStartMinutes,
+    dayEndBoundary,
+  );
+
   return (
     <section
       ref={timelineRef}
@@ -1066,7 +1439,11 @@ export default function ItineraryTimeline({
           <span className={styles.srOnly}>Time</span>
         </div>
         {days.map((day, column) => (
-          <div key={day.iso} className={styles.day} style={{ gridColumn: column + 2, gridRow: 1 }}>
+          <div
+            key={day.iso}
+            className={[styles.day, axisDate === day.iso ? styles.axis : ""].filter(Boolean).join(" ")}
+            style={{ gridColumn: column + 2, gridRow: 1 }}
+          >
             <DayHeader
               itineraryId={itineraryId}
               date={day.iso}
@@ -1079,7 +1456,7 @@ export default function ItineraryTimeline({
         {slots.map((minutes, row) => (
           <div
             key={minutes}
-            className={styles.time}
+            className={[styles.time, axisMinutes.has(minutes) ? styles.axis : ""].filter(Boolean).join(" ")}
             style={{ gridColumn: 1, gridRow: row + 2 }}
           >
             {formatTime(minutes, timeFormat)}
@@ -1098,27 +1475,47 @@ export default function ItineraryTimeline({
                   styles.cell,
                   column === 0 ? styles.cellFirst : "",
                   canDrop ? styles.cellClickable : "",
-                  overKey === key ? styles.cellOver : "",
+                  overKeys.includes(key) ? styles.cellOver : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 style={{ gridColumn: column + 2, gridRow: row + 2 }}
                 data-date={canDrop ? day.iso : undefined}
                 data-minutes={canDrop ? minutes : undefined}
+                onPointerEnter={canDrop ? () => setPointerKey(key) : undefined}
+                onPointerLeave={
+                  canDrop
+                    ? () => setPointerKey((current) => (current === key ? null : current))
+                    : undefined
+                }
                 onPointerDown={canDrop ? (event) => beginCreate(event, day, minutes) : undefined}
                 onDragEnter={
                   canDrop
                     ? (event) => {
                         const id = draggedIdRef.current;
+                        const activity = id ? items.find((item) => item.id === id) : undefined;
+                        const placement =
+                          activity && hasDragType(event.dataTransfer, "text/plain")
+                            ? scheduledRange(
+                                activity,
+                                day.iso,
+                                minutesToTime(minutes),
+                                dayEnd,
+                                timeInterval,
+                                days,
+                              )
+                            : null;
 
-                        if (!id || !hasDragType(event.dataTransfer, "text/plain") || !canPlace(id, day.iso, minutesToTime(minutes))) {
-                          setOverKey(null);
+                        if (!activity || !placement) {
+                          setOverKeys([]);
                           setDropBlocked(true);
                           return;
                         }
 
                         setDropBlocked(false);
-                        setOverKey(key);
+                        setOverKeys(
+                          placementCellKeys(placement, days, dayStartMinutes, dayEndBoundary, slots),
+                        );
                       }
                     : undefined
                 }
@@ -1130,7 +1527,13 @@ export default function ItineraryTimeline({
                           return;
                         }
 
-                        setOverKey((currentKey) => (currentKey === key ? null : currentKey));
+                        const next = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+                        const nextKey =
+                          next?.dataset.date && next.dataset.minutes
+                            ? `${next.dataset.date}|${next.dataset.minutes}`
+                            : null;
+
+                        setOverKeys((current) => (nextKey && current.includes(nextKey) ? current : []));
                       }
                     : undefined
                 }
@@ -1138,7 +1541,7 @@ export default function ItineraryTimeline({
                   canDrop
                     ? (event) => {
                         event.preventDefault();
-                        setOverKey(null);
+                        setOverKeys([]);
                         const id = event.dataTransfer.getData("text/plain");
 
                         if (!canPlace(id, day.iso, minutesToTime(minutes))) {
@@ -1207,25 +1610,47 @@ export default function ItineraryTimeline({
               return null;
             }
 
+            const note = activity.note?.trim() ?? "";
+            const overlap = overlapLayout.get(`${activity.id}:${slice.dayIndex}`);
+
             return (
               <div
                 key={`${activity.id}-${slice.dayIndex}`}
                 data-activity-id={activity.id}
                 className={[
                   styles.block,
+                  overlap && overlap.columns > 1 ? styles.blockOverlap : "",
                   movePreview?.id === activity.id ? styles.blockMoving : "",
-                  hoveredId === activity.id ? styles.blockHighlighted : "",
+                  hoveredId === activity.id ||
+                  (hoveredPlaceId !== null && activity.googlePlaceId === hoveredPlaceId)
+                    ? styles.blockHighlighted
+                    : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 aria-label={activity.name}
+                aria-describedby={note ? `activity-note-${activity.id}-${slice.dayIndex}` : undefined}
+                data-place-id={activity.googlePlaceId ?? undefined}
                 style={{
                   gridColumn: slice.dayIndex + 2,
                   gridRow: `${startIndex + 2} / ${endIndex + 2}`,
                   backgroundColor: activity.color,
                   color: categoryTextColor(activity.color) ?? "var(--text-primary)",
+                  ...overlapBox(overlap),
                 }}
-                onPointerDown={(event) => movePlacedActivity(activity, event)}
+                onPointerEnter={(event) => {
+                  placeBlockNote(event.currentTarget);
+                  highlight?.setHoveredId(activity.id, "timeline");
+                }}
+                onPointerLeave={() => highlight?.setHoveredId(null, "timeline")}
+                onFocusCapture={(event) => placeBlockNote(event.currentTarget)}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 || (event.target as HTMLElement).closest("[data-no-drag]")) {
+                    return;
+                  }
+
+                  movePlacedActivity(activity, event);
+                }}
               >
                 {first && days.length > 1 ? (
                   <span
@@ -1244,6 +1669,38 @@ export default function ItineraryTimeline({
                 <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
                   {activity.name}
                 </span>
+                {note ? (
+                  <span className={styles.noteMark} aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none">
+                      <path
+                        d="M4 2.75h5.15L12.25 5.9V13.25H4V2.75Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9 2.75V6h3.25"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M6 8.25h4M6 10.5h2.75"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                ) : null}
+                {note ? (
+                  <BlockNote
+                    activity={activity}
+                    dayIndex={slice.dayIndex}
+                    onPlace={placeBlockNote}
+                    onCommit={saveActivityNote}
+                  />
+                ) : null}
                 <button
                   className={styles.blockDelete}
                   type="button"
@@ -1273,6 +1730,17 @@ export default function ItineraryTimeline({
           });
         })}
       </div>
+
+      {editing ? (
+        <ActivityEditDialog
+          key={editing.id}
+          itineraryId={itineraryId}
+          activity={editing}
+          categories={categories}
+          stops={stops}
+          openToken={editToken}
+        />
+      ) : null}
 
       <ActivityCreate
         itineraryId={itineraryId}
