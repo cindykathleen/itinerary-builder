@@ -12,6 +12,8 @@
     "db:seed": "node --env-file=.env.local db/seed.mjs"
   },
   "dependencies": {
+    "@neon/config": "^1.10.2",
+    "@neon/env": "^1.6.9",
     "better-auth": "^1.7.4",
     "graphql": "^16.14.2",
     "graphql-yoga": "^5.24.1",

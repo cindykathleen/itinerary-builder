@@ -1,5 +1,10 @@
+import type { NextRequest } from "next/server";
 import { yoga } from "@/lib/graphql/yoga";
 
 const { handleRequest } = yoga;
 
-export { handleRequest as GET, handleRequest as POST, handleRequest as OPTIONS };
+function handle(request: NextRequest) {
+  return handleRequest(request, {});
+}
+
+export { handle as GET, handle as POST, handle as OPTIONS };

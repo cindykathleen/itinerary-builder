@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+/** @returns {Record<string, string>} */
 export function loadLocalEnv() {
+  /** @type {Record<string, string>} */
   const env = {};
   const text = readFileSync(path.join(process.cwd(), ".env.local"), "utf8");
 
