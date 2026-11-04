@@ -1,3 +1,5 @@
+import { fixturePlace, fixtureSuggestions } from "./google-places-fixtures";
+
 const PLACES_ENDPOINT = "https://places.googleapis.com/v1/places";
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_-]{8,255}$/;
 const SESSION_TOKEN_PATTERN =
@@ -76,6 +78,10 @@ export async function autocompletePlaces(input: string, token: string | null) {
     return [];
   }
 
+  if (process.env.GOOGLE_PLACES_FIXTURES === "1") {
+    return fixtureSuggestions(query);
+  }
+
   const body: { input: string; sessionToken?: string } = { input: query };
   const validToken = sessionToken(token);
 
@@ -130,6 +136,16 @@ export async function autocompletePlaces(input: string, token: string | null) {
 export async function getGooglePlace(placeId: string, token: string | null) {
   if (!PLACE_ID_PATTERN.test(placeId)) {
     throw new GooglePlacesError("Choose a place from the suggestions.");
+  }
+
+  if (process.env.GOOGLE_PLACES_FIXTURES === "1") {
+    const place = fixturePlace(placeId);
+
+    if (!place) {
+      throw new GooglePlacesError("That place could not be found.");
+    }
+
+    return place;
   }
 
   const validToken = sessionToken(token);
