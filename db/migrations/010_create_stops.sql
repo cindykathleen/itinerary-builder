@@ -27,4 +27,9 @@ ALTER TABLE activities
     REFERENCES stops(id, itinerary_id)
     ON DELETE SET NULL (stop_id);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON stops TO cindy;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cindy') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON stops TO cindy;
+  END IF;
+END $$;

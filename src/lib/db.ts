@@ -1,7 +1,11 @@
+import { parseEnv } from "@neon/env";
 import { Pool } from "pg";
+import config from "../../neon";
+
+const { postgres } = parseEnv(config, ["DATABASE_URL"]);
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: postgres.databaseUrl,
 });
 
 export default pool;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent } from "react";
 import {
   activityFrame,
   boundaryIndex,
@@ -370,7 +370,7 @@ export default function ItineraryTimeline({
   }, [highlight?.source, hoveredId, hoveredPlaceId]);
 
   useEffect(() => {
-    const rememberDrag = (event: DragEvent) => {
+    const rememberDrag = (event: globalThis.DragEvent) => {
       draggedIdRef.current = event.dataTransfer?.getData("text/plain") || null;
     };
     const stopDragging = () => {
@@ -1326,7 +1326,7 @@ export default function ItineraryTimeline({
                     onPointerDown={(event) => resizeActivity(activity, "start", event)}
                   />
                 ) : null}
-                <span className={styles.blockName} style={{ "--lines": endIndex - startIndex }}>
+                <span className={styles.blockName} style={{ "--lines": endIndex - startIndex } as CSSProperties}>
                   {activity.name}
                 </span>
                 {note ? (
