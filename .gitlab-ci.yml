@@ -1,5 +1,6 @@
 stages:
   - test
+  - deploy
 
 default:
   image: node:22
@@ -21,3 +22,13 @@ unit:
   script:
     - npm ci
     - npm test
+
+deploy:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - lint
+    - unit
+  script:
+    - curl --fail -X POST "$RENDER_DEPLOY_HOOK"
