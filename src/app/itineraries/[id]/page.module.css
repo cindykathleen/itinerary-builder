@@ -467,7 +467,8 @@
 
 .activity p {
   color: var(--text-secondary);
-  white-space: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .googlePlace {
