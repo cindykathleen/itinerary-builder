@@ -45,10 +45,31 @@ function clip(value: string) {
   return value.trim().slice(0, 255);
 }
 
+async function browserReferer() {
+  try {
+    const { headers } = await import("next/headers");
+    const incoming = await headers();
+    const referer = incoming.get("referer") ?? incoming.get("origin");
+
+    if (referer && /^https?:\/\//i.test(referer)) {
+      return referer;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function placesRequest(url: string | URL, init: RequestInit) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   headers.set("X-Goog-Api-Key", apiKey());
+  const referer = await browserReferer();
+
+  if (referer) {
+    headers.set("Referer", referer);
+  }
 
   let response: Response;
 
