@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useActivityHighlight } from "./ActivityHighlight";
 import { loadGoogleMaps } from "./load-google-maps";
 import styles from "./page.module.css";
@@ -212,8 +212,10 @@ export default function ItineraryMap({
     .map((place) => `${place.id}:${place.latitude}:${place.longitude}:${place.color}`)
     .join("|");
 
-  placesRef.current = places;
-  hoverPlaceRef.current = highlight?.setHoveredPlaceId ?? (() => {});
+  useLayoutEffect(() => {
+    placesRef.current = places;
+    hoverPlaceRef.current = highlight?.setHoveredPlaceId ?? (() => {});
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;

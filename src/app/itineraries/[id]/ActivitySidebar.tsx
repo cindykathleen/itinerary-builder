@@ -238,6 +238,9 @@ export default function ActivitySidebar({
   const renameRef = useRef<HTMLDialogElement>(null);
   const deleteRef = useRef<HTMLDialogElement>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(stops[0]?.id ?? null);
+  const activeStopId = stops.some((stop) => stop.id === selectedStopId)
+    ? selectedStopId
+    : (stops[0]?.id ?? null);
   const [placeName, setPlaceName] = useState("");
   const [renameStop, setRenameStop] = useState<StopOption | null>(null);
   const [renameName, setRenameName] = useState("");
@@ -245,19 +248,11 @@ export default function ActivitySidebar({
   const logisticsCategories = categories.filter((category) => category.stopId === null);
   const logisticsActivities = activities.filter((activity) => activity.stopId === null);
   const placeCategories = categories.filter(
-    (category) => selectedStopId !== null && category.stopId === selectedStopId,
+    (category) => activeStopId !== null && category.stopId === activeStopId,
   );
   const placeActivities = activities.filter(
-    (activity) => selectedStopId !== null && activity.stopId === selectedStopId,
+    (activity) => activeStopId !== null && activity.stopId === activeStopId,
   );
-
-  useEffect(() => {
-    if (stops.some((stop) => stop.id === selectedStopId)) {
-      return;
-    }
-
-    setSelectedStopId(stops[0]?.id ?? null);
-  }, [selectedStopId, stops]);
 
   useEffect(() => {
     if (renameStop && renameRef.current && !renameRef.current.open) {
@@ -306,10 +301,10 @@ export default function ActivitySidebar({
       <header className={styles.activitiesHeader}>
         <div className={styles.activitiesHeading}>
           <h2 className={styles.activitiesTitle}>Activities</h2>
-          {selectedStopId ? (
+          {activeStopId ? (
             <PlaceSelect
               stops={stops}
-              selectedStopId={selectedStopId}
+              selectedStopId={activeStopId}
               onSelect={setSelectedStopId}
               onRename={(stop) => {
                 setRenameName(stop.name);
@@ -323,7 +318,7 @@ export default function ActivitySidebar({
           itineraryId={itineraryId}
           categories={categories}
           stops={stops}
-          defaultStopId={selectedStopId}
+          defaultStopId={activeStopId}
           onNewPlace={openCreate}
         />
       </header>
