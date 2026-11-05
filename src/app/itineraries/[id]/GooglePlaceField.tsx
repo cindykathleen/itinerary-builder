@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import dialogStyles from "../dialog.module.css";
 
 const SEARCH_DELAY_MS = 800;
@@ -19,7 +19,7 @@ export default function GooglePlaceField({
   const inputId = useId();
   const listId = useId();
   const descriptionId = useId();
-  const sessionToken = useRef(crypto.randomUUID());
+  const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [selected, setSelected] = useState<PlaceSuggestion | null>(place);
@@ -31,9 +31,6 @@ export default function GooglePlaceField({
 
   useEffect(() => {
     if (selected || query.trim().length < 2) {
-      setSuggestions([]);
-      setOpen(false);
-      setLoading(false);
       return;
     }
 
@@ -46,7 +43,7 @@ export default function GooglePlaceField({
       try {
         const params = new URLSearchParams({
           input: query.trim(),
-          sessionToken: sessionToken.current,
+          sessionToken,
         });
         const response = await fetch(`/api/places/autocomplete?${params}`, {
           signal: controller.signal,
@@ -88,7 +85,7 @@ export default function GooglePlaceField({
       window.clearTimeout(timer);
       setLoading(false);
     };
-  }, [query, selected]);
+  }, [query, selected, sessionToken]);
 
   const choose = (suggestion: PlaceSuggestion) => {
     setSelected(suggestion);
@@ -106,7 +103,7 @@ export default function GooglePlaceField({
     setSuggestions([]);
     setOpen(false);
     setError("");
-    sessionToken.current = crypto.randomUUID();
+    setSessionToken(crypto.randomUUID());
   };
 
   const moveActive = (direction: 1 | -1) => {
@@ -136,7 +133,7 @@ export default function GooglePlaceField({
         <div className={dialogStyles.googlePlace}>
           <input type="hidden" name="googlePlaceId" value={selected.placeId} />
           {fromSearch ? (
-            <input type="hidden" name="sessionToken" value={sessionToken.current} />
+            <input type="hidden" name="sessionToken" value={sessionToken} />
           ) : null}
           <span className={dialogStyles.googlePlaceText}>
             <span className={dialogStyles.googlePlaceName}>{selected.name}</span>
@@ -168,9 +165,15 @@ export default function GooglePlaceField({
             placeholder="Search for a place"
             autoComplete="off"
             onChange={(event) => {
-              setQuery(event.target.value);
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
               setError("");
               setOpen(false);
+
+              if (nextQuery.trim().length < 2) {
+                setSuggestions([]);
+                setLoading(false);
+              }
             }}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { updateActivity } from "../actions";
@@ -63,7 +63,9 @@ export default function ActivityEditDialog({
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
 
-  activityRef.current = activity;
+  useLayoutEffect(() => {
+    activityRef.current = activity;
+  }, [activity]);
 
   const applyActivity = (next: EditableActivity) => {
     setName(next.name);

@@ -167,20 +167,22 @@ function BlockNote({
     return () => document.removeEventListener("pointerdown", commitOnOutsidePointer, true);
   }, []);
 
-  commitRef.current = (raw: string) => {
-    if (revertRef.current) {
-      return;
-    }
+  useLayoutEffect(() => {
+    commitRef.current = (raw: string) => {
+      if (revertRef.current) {
+        return;
+      }
 
-    const next = raw.trim();
+      const next = raw.trim();
 
-    if (next === savedRef.current.trim()) {
-      return;
-    }
+      if (next === savedRef.current.trim()) {
+        return;
+      }
 
-    savedRef.current = next;
-    onCommit(activity, next);
-  };
+      savedRef.current = next;
+      onCommit(activity, next);
+    };
+  });
 
   useLayoutEffect(() => {
     onPlaceRef.current = onPlace;
@@ -291,6 +293,12 @@ export default function ItineraryTimeline({
   const draggedIdRef = useRef<string | null>(null);
   const addUnscheduledRef = useRef<(id: string) => void>(() => {});
   const [items, setItems] = useState(activities);
+  const [activitySource, setActivitySource] = useState(activities);
+
+  if (activities !== activitySource) {
+    setActivitySource(activities);
+    setItems(activities);
+  }
   const [overKeys, setOverKeys] = useState<string[]>([]);
   const [pointerKey, setPointerKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -321,10 +329,6 @@ export default function ItineraryTimeline({
   } else if (axisSeparator >= 0 && axisKey) {
     axisMinutes.add(Number(axisKey.slice(axisSeparator + 1)));
   }
-
-  useEffect(() => {
-    setItems(activities);
-  }, [activities]);
 
   useEffect(() => {
     const timeline = timelineRef.current;
@@ -587,7 +591,8 @@ export default function ItineraryTimeline({
     }
   };
 
-  addUnscheduledRef.current = (id: string) => {
+  useLayoutEffect(() => {
+    addUnscheduledRef.current = (id: string) => {
     const activity = items.find((item) => item.id === id);
 
     if (!activity || activity.startDate) {
@@ -628,7 +633,8 @@ export default function ItineraryTimeline({
     if (slot) {
       void placeActivity(activity.id, slot.date, slot.startTime);
     }
-  };
+    };
+  });
 
   const editPlacedActivity = (activity: TimelineActivity) => {
     setEditing({
