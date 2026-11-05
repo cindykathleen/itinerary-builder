@@ -2,6 +2,7 @@ import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import pool from "@/lib/db";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
+import { sectionNames } from "@/lib/sections";
 import { clockTime } from "@/lib/timeline";
 import type { GraphQLContext } from "./context";
 
@@ -17,6 +18,7 @@ type ItineraryRow = {
   status: "active" | "archived" | "trashed";
   photo_url: string | null;
   schedule_configured: boolean;
+  planning_mode: "timeline" | "sections";
 };
 
 function toItinerary(row: ItineraryRow) {
@@ -32,6 +34,7 @@ function toItinerary(row: ItineraryRow) {
     status: row.status,
     photoUrl: row.photo_url,
     scheduleConfigured: row.schedule_configured,
+    planningMode: row.planning_mode,
   };
 }
 
@@ -46,7 +49,8 @@ const itineraryColumns = `
   time_format,
   status,
   photo_url,
-  schedule_configured
+  schedule_configured,
+  planning_mode
 `;
 
 const TRASH_RETENTION = "14 days";
@@ -278,6 +282,11 @@ export const schema = createSchema({
       trashed
     }
 
+    enum PlanningMode {
+      timeline
+      sections
+    }
+
     type Itinerary {
       id: ID!
       name: String!
@@ -290,9 +299,11 @@ export const schema = createSchema({
       status: ItineraryStatus!
       photoUrl: String
       scheduleConfigured: Boolean!
+      planningMode: PlanningMode!
       daySettings: [ItineraryDay!]!
       categories: [Category!]!
       stops: [Stop!]!
+      sections: [ItinerarySection!]!
       googlePlaces: [ItineraryPlace!]!
       activities: [Activity!]!
     }
@@ -313,6 +324,12 @@ export const schema = createSchema({
     type Stop {
       id: ID!
       name: String!
+    }
+
+    type ItinerarySection {
+      id: ID!
+      name: String!
+      position: Int!
     }
 
     type ItineraryPlace {
@@ -338,6 +355,9 @@ export const schema = createSchema({
       startDate: String
       startTime: String
       endTime: String
+      sectionId: ID
+      sectionDate: String
+      position: Int
     }
 
     type Query {
@@ -355,10 +375,12 @@ export const schema = createSchema({
       renameItinerary(id: ID!, name: String!): Itinerary!
       saveItinerarySchedule(
         id: ID!
-        dayStart: String!
-        dayEnd: String!
-        timeInterval: Int!
+        planningMode: PlanningMode!
+        dayStart: String
+        dayEnd: String
+        timeInterval: Int
         places: [String!]!
+        sections: [String!]
       ): Itinerary!
       saveItineraryDayHeading(id: ID!, date: String!, heading: String!): Boolean!
       updateItinerary(
@@ -457,6 +479,21 @@ export const schema = createSchema({
 
         return result.rows;
       },
+      sections: async (parent: { id: string }) => {
+        const result = await pool.query<{ id: string; name: string; position: number }>(
+          `SELECT id, name, position
+           FROM itinerary_sections
+           WHERE itinerary_id = $1
+           ORDER BY position`,
+          [parent.id],
+        );
+
+        return result.rows.map((section) => ({
+          id: section.id,
+          name: section.name,
+          position: Number(section.position),
+        }));
+      },
       googlePlaces: async (parent: { id: string }) => {
         const result = await pool.query<{
           id: string;
@@ -512,6 +549,9 @@ export const schema = createSchema({
           start_time: string | null;
           end_date: string | null;
           end_time: string | null;
+          section_id: string | null;
+          section_date: string | null;
+          position: number | null;
         }>(
           `SELECT activities.id,
                   activities.name,
@@ -525,7 +565,10 @@ export const schema = createSchema({
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'YYYY-MM-DD') AS start_date,
                   to_char(activities.start_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS start_time,
                   to_char(activities.end_at AT TIME ZONE itineraries.timezone, 'YYYY-MM-DD') AS end_date,
-                  to_char(activities.end_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS end_time
+                  to_char(activities.end_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS end_time,
+                  activities.section_id,
+                  activities.section_date::text AS section_date,
+                  activities.position
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            LEFT JOIN places ON places.id = activities.place_id
@@ -547,6 +590,9 @@ export const schema = createSchema({
           startDate: activity.start_date,
           startTime: activity.start_time,
           endTime: clockTime(activity.start_date, activity.end_date, activity.end_time),
+          sectionId: activity.section_id,
+          sectionDate: activity.section_date,
+          position: activity.position === null ? null : Number(activity.position),
         }));
       },
     },
@@ -762,10 +808,12 @@ export const schema = createSchema({
         _parent,
         args: {
           id: string;
-          dayStart: string;
-          dayEnd: string;
-          timeInterval: number;
+          planningMode: "timeline" | "sections";
+          dayStart?: string | null;
+          dayEnd?: string | null;
+          timeInterval?: number | null;
           places: string[];
+          sections?: string[] | null;
         },
         context: GraphQLContext,
       ) => {
@@ -775,28 +823,12 @@ export const schema = createSchema({
           });
         }
 
-        const dayStart = parseTime(args.dayStart);
-        const dayEnd = parseTime(args.dayEnd);
-        const timeInterval = args.timeInterval;
+        const planningMode = args.planningMode;
         const places = placeNames(args.places);
-
-        if (!dayStart || !dayEnd) {
-          throw new GraphQLError("A valid day start and day end are required.", {
-            extensions: { code: "BAD_USER_INPUT" },
-          });
-        }
-
-        if (dayStart >= dayEnd) {
-          throw new GraphQLError("Day end must be later than the day start.", {
-            extensions: { code: "BAD_USER_INPUT" },
-          });
-        }
-
-        if (timeInterval !== 30 && timeInterval !== 60) {
-          throw new GraphQLError("Time interval must be 30 minutes or 1 hour.", {
-            extensions: { code: "BAD_USER_INPUT" },
-          });
-        }
+        let dayStart: string | null = null;
+        let dayEnd: string | null = null;
+        let timeInterval: number | null = null;
+        let sections: string[] = [];
 
         if (places.length === 0) {
           throw new GraphQLError("A place is required.", {
@@ -804,20 +836,83 @@ export const schema = createSchema({
           });
         }
 
+        if (planningMode === "timeline") {
+          dayStart = args.dayStart ? parseTime(args.dayStart) : null;
+          dayEnd = args.dayEnd ? parseTime(args.dayEnd) : null;
+          timeInterval = args.timeInterval ?? null;
+
+          if (!dayStart || !dayEnd) {
+            throw new GraphQLError("A valid day start and day end are required.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          if (dayStart >= dayEnd) {
+            throw new GraphQLError("Day end must be later than the day start.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          if (timeInterval !== 30 && timeInterval !== 60) {
+            throw new GraphQLError("Time interval must be 30 minutes or 1 hour.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+        } else {
+          try {
+            sections = sectionNames(args.sections ?? []);
+          } catch (error) {
+            throw new GraphQLError(
+              error instanceof Error ? error.message : "A section is required.",
+              { extensions: { code: "BAD_USER_INPUT" } },
+            );
+          }
+        }
+
         const client = await pool.connect();
 
         try {
           await client.query("BEGIN");
+          const existing = await client.query<{ schedule_configured: boolean }>(
+            `SELECT schedule_configured
+             FROM itineraries
+             WHERE id = $1 AND owner_id = $2
+             FOR UPDATE`,
+            [args.id, context.userId],
+          );
+
+          if (!existing.rows[0]) {
+            throw new GraphQLError("Itinerary not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          if (existing.rows[0].schedule_configured) {
+            throw new GraphQLError("Planning style cannot be changed.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
           const result = await client.query<ItineraryRow>(
-            `UPDATE itineraries
-             SET day_start = $1::time,
-                 day_end = $2::time,
-                 time_interval = $3,
-                 schedule_configured = true,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = $4 AND owner_id = $5
-             RETURNING ${itineraryColumns}`,
-            [dayStart, dayEnd, timeInterval, args.id, context.userId],
+            planningMode === "timeline"
+              ? `UPDATE itineraries
+                 SET day_start = $1::time,
+                     day_end = $2::time,
+                     time_interval = $3,
+                     planning_mode = 'timeline',
+                     schedule_configured = true,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $4 AND owner_id = $5
+                 RETURNING ${itineraryColumns}`
+              : `UPDATE itineraries
+                 SET planning_mode = 'sections',
+                     schedule_configured = true,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $1 AND owner_id = $2
+                 RETURNING ${itineraryColumns}`,
+            planningMode === "timeline"
+              ? [dayStart, dayEnd, timeInterval, args.id, context.userId]
+              : [args.id, context.userId],
           );
           const itinerary = result.rows[0];
 
@@ -844,6 +939,14 @@ export const schema = createSchema({
                  ($1, 'Coffee', '#E9E0D8', false, $2, clock_timestamp() + interval '2 milliseconds'),
                  ($1, 'Activities', '#D6E5F5', false, $2, clock_timestamp() + interval '3 milliseconds')`,
               [args.id, stop.rows[0].id],
+            );
+          }
+
+          for (const [position, name] of sections.entries()) {
+            await client.query(
+              `INSERT INTO itinerary_sections (itinerary_id, name, position)
+               VALUES ($1, $2, $3)`,
+              [args.id, name, position],
             );
           }
 
@@ -1706,13 +1809,15 @@ export const schema = createSchema({
           day_end: string;
           time_interval: number;
           timezone: string;
+          planning_mode: "timeline" | "sections";
         }>(
           `SELECT itineraries.date_start::text AS date_start,
                   itineraries.date_end::text AS date_end,
                   itineraries.day_start::text AS day_start,
                   itineraries.day_end::text AS day_end,
                   itineraries.time_interval,
-                  itineraries.timezone
+                  itineraries.timezone,
+                  itineraries.planning_mode
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            WHERE activities.id = $1
@@ -1726,6 +1831,12 @@ export const schema = createSchema({
         if (!itinerary) {
           throw new GraphQLError("Activity not found.", {
             extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        if (itinerary.planning_mode === "sections") {
+          throw new GraphQLError("This itinerary is planned in sections.", {
+            extensions: { code: "BAD_USER_INPUT" },
           });
         }
 

@@ -84,26 +84,32 @@ const createItineraryMutation = /* GraphQL */ `
 const saveItineraryScheduleMutation = /* GraphQL */ `
   mutation SaveItinerarySchedule(
     $id: ID!
-    $dayStart: String!
-    $dayEnd: String!
-    $timeInterval: Int!
+    $planningMode: PlanningMode!
+    $dayStart: String
+    $dayEnd: String
+    $timeInterval: Int
     $places: [String!]!
+    $sections: [String!]
   ) {
     saveItinerarySchedule(
       id: $id
+      planningMode: $planningMode
       dayStart: $dayStart
       dayEnd: $dayEnd
       timeInterval: $timeInterval
       places: $places
+      sections: $sections
     ) {
       id
       scheduleConfigured
+      planningMode
     }
   }
 `;
 
 export async function saveItinerarySchedule(formData: FormData) {
   const id = String(formData.get("id") ?? "");
+  const planningMode = formData.get("planningMode") === "sections" ? "sections" : "timeline";
   const dayStart = String(formData.get("dayStart") ?? "");
   const dayEnd = String(formData.get("dayEnd") ?? "");
   const timeInterval = Number(formData.get("timeInterval"));
@@ -111,13 +117,16 @@ export async function saveItinerarySchedule(formData: FormData) {
     ...formData.getAll("places").map((value) => String(value)),
     String(formData.get("placeDraft") ?? ""),
   ];
+  const sections = formData.getAll("sections").map((value) => String(value));
 
   await executeGraphQL(saveItineraryScheduleMutation, {
     id,
-    dayStart,
-    dayEnd,
-    timeInterval,
+    planningMode,
+    dayStart: planningMode === "timeline" ? dayStart : null,
+    dayEnd: planningMode === "timeline" ? dayEnd : null,
+    timeInterval: planningMode === "timeline" ? timeInterval : null,
     places,
+    sections: planningMode === "sections" ? sections : [],
   });
   revalidatePath(`/itineraries/${id}`);
 }
