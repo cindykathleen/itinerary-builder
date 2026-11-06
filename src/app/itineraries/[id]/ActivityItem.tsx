@@ -1,6 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
+import {
+  SIDEBAR_DRAG_OPEN,
+  SIDEBAR_DRAG_SCHEDULED,
+  type SidebarDropPlacement,
+} from "@/lib/sidebar-order";
 import { deleteActivity } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
@@ -31,6 +36,9 @@ export default function ActivityItem({
   categoryId: activityCategoryId,
   stopId: activityStopId,
   scheduled,
+  dropPlacement = null,
+  onDropPlacement,
+  onReorder,
   categories,
   stops,
 }: {
@@ -44,6 +52,9 @@ export default function ActivityItem({
   categoryId: string | null;
   stopId: string | null;
   scheduled: boolean;
+  dropPlacement?: SidebarDropPlacement | null;
+  onDropPlacement?: (placement: SidebarDropPlacement | null) => void;
+  onReorder?: (draggedId: string, placement: SidebarDropPlacement) => void;
   categories: CategoryOption[];
   stops: StopOption[];
 }) {
@@ -92,11 +103,56 @@ export default function ActivityItem({
     await deleteActivity(formData);
   };
 
+  const dragType = scheduled ? SIDEBAR_DRAG_SCHEDULED : SIDEBAR_DRAG_OPEN;
+
+  const placementAt = (clientY: number, element: HTMLElement): SidebarDropPlacement => {
+    const rect = element.getBoundingClientRect();
+    return clientY < rect.top + rect.height / 2 ? "before" : "after";
+  };
+
   return (
     <li
-      className={scheduled ? `${styles.activity} ${styles.activityScheduled}` : styles.activity}
+      className={[
+        styles.activity,
+        scheduled ? styles.activityScheduled : "",
+        dropPlacement === "before" ? styles.activityDropBefore : "",
+        dropPlacement === "after" ? styles.activityDropAfter : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onMouseEnter={() => highlight?.setHoveredId(id)}
       onMouseLeave={() => highlight?.setHoveredId(null)}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes(dragType)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        onDropPlacement?.(placementAt(event.clientY, event.currentTarget));
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return;
+        }
+
+        onDropPlacement?.(null);
+      }}
+      onDrop={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes(dragType)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        const draggedId = event.dataTransfer.getData("text/plain");
+        onDropPlacement?.(null);
+
+        if (draggedId) {
+          onReorder?.(draggedId, placementAt(event.clientY, event.currentTarget));
+        }
+      }}
     >
       <div
         className={styles.activityBody}
@@ -108,8 +164,10 @@ export default function ActivityItem({
           }
 
           event.dataTransfer.setData("text/plain", id);
+          event.dataTransfer.setData(dragType, id);
           event.dataTransfer.effectAllowed = "move";
         }}
+        onDragEnd={() => onDropPlacement?.(null)}
       >
         <div className={styles.activityTitle}>
           <h4>{activityName}</h4>

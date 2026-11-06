@@ -303,6 +303,21 @@ export async function deleteStop(formData: FormData) {
   revalidatePath(`/itineraries/${itineraryId}`);
 }
 
+const reorderSidebarActivityMutation = /* GraphQL */ `
+  mutation ReorderSidebarActivity($id: ID!, $itineraryId: ID!, $beforeId: ID) {
+    reorderSidebarActivity(id: $id, itineraryId: $itineraryId, beforeId: $beforeId)
+  }
+`;
+
+export async function reorderSidebarActivity(input: {
+  itineraryId: string;
+  id: string;
+  beforeId: string | null;
+}) {
+  await executeGraphQL(reorderSidebarActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
+
 export async function deleteCategory(formData: FormData) {
   const itineraryId = String(formData.get("itineraryId") ?? "");
   const id = String(formData.get("id") ?? "");

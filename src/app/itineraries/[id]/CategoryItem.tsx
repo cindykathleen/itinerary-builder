@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { categoryTextColor } from "@/lib/category-color";
-import { deleteCategory, updateCategory } from "../actions";
+import { reorderSidebarActivities, sidebarBeforeId } from "@/lib/sidebar-order";
+import type { SidebarDropPlacement } from "@/lib/sidebar-order";
+import { deleteCategory, reorderSidebarActivity, updateCategory } from "../actions";
 import ActivityItem from "./ActivityItem";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
@@ -68,6 +70,26 @@ export default function CategoryItem({
   const previewRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(categoryName);
   const [color, setColor] = useState(hexDigits(categoryColor));
+  const activityKey = (activity: (typeof activities)[number]) =>
+    [
+      activity.id,
+      activity.scheduled ? "1" : "0",
+      activity.name,
+      activity.note ?? "",
+      activity.googlePlaceId ?? "",
+    ].join("\u001f");
+  const [items, setItems] = useState(activities);
+  const [orderKey, setOrderKey] = useState(activities.map(activityKey).join("|"));
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    placement: SidebarDropPlacement;
+  } | null>(null);
+  const nextOrderKey = activities.map(activityKey).join("|");
+
+  if (nextOrderKey !== orderKey) {
+    setOrderKey(nextOrderKey);
+    setItems(activities);
+  }
   const colorComplete = /^[0-9A-Fa-f]{6}$/.test(color);
   const colorError = color !== "" && !colorComplete;
   const canSubmit = name.trim() !== "" && !colorError;
@@ -158,6 +180,32 @@ export default function CategoryItem({
     closeDialog();
   };
 
+  const moveActivity = async (
+    draggedId: string,
+    targetId: string,
+    placement: SidebarDropPlacement,
+  ) => {
+    setDropTarget(null);
+    const next = reorderSidebarActivities(items, draggedId, targetId, placement);
+
+    if (!next) {
+      return;
+    }
+
+    const previous = items;
+    setItems(next);
+
+    try {
+      await reorderSidebarActivity({
+        itineraryId,
+        id: draggedId,
+        beforeId: sidebarBeforeId(next, draggedId),
+      });
+    } catch {
+      setItems(previous);
+    }
+  };
+
   const openColorPicker = () => {
     const picker = colorPickerRef.current;
     const dialog = dialogRef.current;
@@ -210,9 +258,9 @@ export default function CategoryItem({
       </details>
       )}
       </div>
-      {activities.length > 0 ? (
+      {items.length > 0 ? (
         <ul className={styles.activityList}>
-          {activities.map((activity) => (
+          {items.map((activity) => (
             <ActivityItem
               key={activity.id}
               itineraryId={itineraryId}
@@ -223,6 +271,11 @@ export default function CategoryItem({
               googlePlaceName={activity.googlePlaceName}
               googlePlaceAddress={activity.googlePlaceAddress}
               scheduled={activity.scheduled}
+              dropPlacement={dropTarget?.id === activity.id ? dropTarget.placement : null}
+              onDropPlacement={(placement) =>
+                setDropTarget(placement ? { id: activity.id, placement } : null)
+              }
+              onReorder={(draggedId, placement) => moveActivity(draggedId, activity.id, placement)}
               categoryId={readOnly ? null : id}
               stopId={activity.stopId}
               categories={categories}

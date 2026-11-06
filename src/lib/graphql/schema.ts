@@ -2,6 +2,7 @@ import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import pool from "@/lib/db";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
+import { reorderSidebarActivities } from "@/lib/sidebar-order";
 import { sectionNames } from "@/lib/sections";
 import { clockTime } from "@/lib/timeline";
 import type { GraphQLContext } from "./context";
@@ -358,6 +359,7 @@ export const schema = createSchema({
       sectionId: ID
       sectionDate: String
       position: Int
+      sidebarPosition: Int
     }
 
     type Query {
@@ -435,6 +437,7 @@ export const schema = createSchema({
         endTime: String!
       ): Boolean!
       unscheduleActivity(id: ID!, itineraryId: ID!): Boolean!
+      reorderSidebarActivity(id: ID!, itineraryId: ID!, beforeId: ID): Boolean!
       deleteActivity(id: ID!): Boolean!
     }
   `,
@@ -552,6 +555,7 @@ export const schema = createSchema({
           section_id: string | null;
           section_date: string | null;
           position: number | null;
+          sidebar_position: number | null;
         }>(
           `SELECT activities.id,
                   activities.name,
@@ -568,12 +572,16 @@ export const schema = createSchema({
                   to_char(activities.end_at AT TIME ZONE itineraries.timezone, 'HH24:MI') AS end_time,
                   activities.section_id,
                   activities.section_date::text AS section_date,
-                  activities.position
+                  activities.position,
+                  activities.sidebar_position
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            LEFT JOIN places ON places.id = activities.place_id
            WHERE activities.itinerary_id = $1
-           ORDER BY activities.created_at, activities.name`,
+           ORDER BY (activities.start_at IS NOT NULL),
+                    activities.sidebar_position NULLS LAST,
+                    activities.created_at,
+                    activities.name`,
           [parent.id],
         );
 
@@ -593,6 +601,8 @@ export const schema = createSchema({
           sectionId: activity.section_id,
           sectionDate: activity.section_date,
           position: activity.position === null ? null : Number(activity.position),
+          sidebarPosition:
+            activity.sidebar_position === null ? null : Number(activity.sidebar_position),
         }));
       },
     },
@@ -1598,7 +1608,8 @@ export const schema = createSchema({
         }>(
           scheduling
             ? `INSERT INTO activities (
-                 itinerary_id, category_id, stop_id, place_id, name, note, start_at, end_at, in_sidebar
+                 itinerary_id, category_id, stop_id, place_id, name, note, start_at, end_at, in_sidebar,
+                 sidebar_position
                )
                VALUES (
                  $1,
@@ -1609,13 +1620,37 @@ export const schema = createSchema({
                  $6,
                  (($7::date + $8::time) AT TIME ZONE $10),
                  (($7::date + $9::time) AT TIME ZONE $10),
-                 $11
+                 $11,
+                 CASE WHEN $11 THEN (
+                   SELECT COALESCE(MAX(sidebar_position), -1) + 1
+                   FROM activities
+                   WHERE itinerary_id = $1
+                     AND category_id IS NOT DISTINCT FROM $2::uuid
+                     AND in_sidebar = true
+                     AND start_at IS NOT NULL
+                 ) ELSE NULL END
                )
                RETURNING id, name, note, category_id, stop_id`
             : `INSERT INTO activities (
-                 itinerary_id, category_id, stop_id, place_id, name, note, in_sidebar
+                 itinerary_id, category_id, stop_id, place_id, name, note, in_sidebar, sidebar_position
                )
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               VALUES (
+                 $1,
+                 $2,
+                 $3,
+                 $4,
+                 $5,
+                 $6,
+                 $7,
+                 CASE WHEN $7 THEN (
+                   SELECT COALESCE(MAX(sidebar_position), -1) + 1
+                   FROM activities
+                   WHERE itinerary_id = $1
+                     AND category_id IS NOT DISTINCT FROM $2::uuid
+                     AND in_sidebar = true
+                     AND start_at IS NULL
+                 ) ELSE NULL END
+               )
                RETURNING id, name, note, category_id, stop_id`,
           scheduling
             ? [
@@ -1681,8 +1716,12 @@ export const schema = createSchema({
           });
         }
 
-        const existing = await pool.query<{ itinerary_id: string }>(
-          `SELECT activities.itinerary_id
+        const existing = await pool.query<{
+          itinerary_id: string;
+          category_id: string | null;
+          in_sidebar: boolean;
+        }>(
+          `SELECT activities.itinerary_id, activities.category_id, activities.in_sidebar
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            WHERE activities.id = $1 AND itineraries.owner_id = $2`,
@@ -1772,6 +1811,24 @@ export const schema = createSchema({
         );
 
         const activity = result.rows[0];
+        const joinsSidebar = typeof args.inSidebar === "boolean" ? args.inSidebar : activityRow.in_sidebar;
+
+        if (joinsSidebar && (activity.category_id !== activityRow.category_id || !activityRow.in_sidebar)) {
+          await pool.query(
+            `UPDATE activities
+             SET sidebar_position = (
+               SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
+               FROM activities AS siblings
+               WHERE siblings.itinerary_id = activities.itinerary_id
+                 AND siblings.category_id IS NOT DISTINCT FROM $2::uuid
+                 AND siblings.in_sidebar = true
+                 AND siblings.id <> activities.id
+                 AND (siblings.start_at IS NOT NULL) = (activities.start_at IS NOT NULL)
+             )
+             WHERE id = $1`,
+            [args.id, activity.category_id],
+          );
+        }
 
         return {
           id: activity.id,
@@ -1810,6 +1867,7 @@ export const schema = createSchema({
           time_interval: number;
           timezone: string;
           planning_mode: "timeline" | "sections";
+          scheduled: boolean;
         }>(
           `SELECT itineraries.date_start::text AS date_start,
                   itineraries.date_end::text AS date_end,
@@ -1817,7 +1875,8 @@ export const schema = createSchema({
                   itineraries.day_end::text AS day_end,
                   itineraries.time_interval,
                   itineraries.timezone,
-                  itineraries.planning_mode
+                  itineraries.planning_mode,
+                  activities.start_at IS NOT NULL AS scheduled
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            WHERE activities.id = $1
@@ -1867,6 +1926,18 @@ export const schema = createSchema({
           `UPDATE activities
            SET start_at = (($3::date + $4::time) AT TIME ZONE $6),
                end_at = ((($3::date + $7::int) + $5::time) AT TIME ZONE $6),
+               sidebar_position = CASE
+                 WHEN $8::boolean OR in_sidebar = false THEN sidebar_position
+                 ELSE (
+                   SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
+                   FROM activities AS siblings
+                   WHERE siblings.itinerary_id = activities.itinerary_id
+                     AND siblings.category_id IS NOT DISTINCT FROM activities.category_id
+                     AND siblings.in_sidebar = true
+                     AND siblings.id <> activities.id
+                     AND siblings.start_at IS NOT NULL
+                 )
+               END,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $1 AND itinerary_id = $2`,
           [
@@ -1877,6 +1948,7 @@ export const schema = createSchema({
             parsedEnd.time,
             itinerary.timezone,
             parsedEnd.extraDays,
+            itinerary.scheduled,
           ],
         );
 
@@ -1897,6 +1969,18 @@ export const schema = createSchema({
           `UPDATE activities
            SET start_at = NULL,
                end_at = NULL,
+               sidebar_position = CASE
+                 WHEN in_sidebar = false THEN sidebar_position
+                 ELSE (
+                   SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
+                   FROM activities AS siblings
+                   WHERE siblings.itinerary_id = activities.itinerary_id
+                     AND siblings.category_id IS NOT DISTINCT FROM activities.category_id
+                     AND siblings.in_sidebar = true
+                     AND siblings.id <> activities.id
+                     AND siblings.start_at IS NULL
+                 )
+               END,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $1
              AND itinerary_id = $2
@@ -1914,6 +1998,126 @@ export const schema = createSchema({
         }
 
         return true;
+      },
+      reorderSidebarActivity: async (
+        _parent,
+        args: { id: string; itineraryId: string; beforeId?: string | null },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to edit activities.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const beforeId = args.beforeId?.trim() || null;
+
+        if (beforeId === args.id) {
+          return true;
+        }
+
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+          const currentResult = await client.query<{
+            category_id: string | null;
+            in_sidebar: boolean;
+            scheduled: boolean;
+          }>(
+            `SELECT category_id, in_sidebar, start_at IS NOT NULL AS scheduled
+             FROM activities
+             WHERE id = $1
+               AND itinerary_id = $2
+               AND itinerary_id IN (SELECT id FROM itineraries WHERE owner_id = $3)
+             FOR UPDATE`,
+            [args.id, args.itineraryId, context.userId],
+          );
+          const current = currentResult.rows[0];
+
+          if (!current) {
+            throw new GraphQLError("Activity not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          if (!current.in_sidebar) {
+            throw new GraphQLError("Only sidebar activities can be reordered.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          const siblings = await client.query<{ id: string; scheduled: boolean }>(
+            `SELECT id, start_at IS NOT NULL AS scheduled
+             FROM activities
+             WHERE itinerary_id = $1
+               AND category_id IS NOT DISTINCT FROM $2::uuid
+               AND in_sidebar = true
+             ORDER BY (start_at IS NOT NULL), sidebar_position NULLS LAST, created_at, id
+             FOR UPDATE`,
+            [args.itineraryId, current.category_id],
+          );
+          const ordered = siblings.rows.map((activity) => ({
+            id: activity.id,
+            scheduled: activity.scheduled,
+          }));
+          let next = ordered;
+
+          if (beforeId) {
+            const before = ordered.find((activity) => activity.id === beforeId);
+
+            if (!before || before.scheduled !== current.scheduled) {
+              throw new GraphQLError("Drop the activity within its own group.", {
+                extensions: { code: "BAD_USER_INPUT" },
+              });
+            }
+
+            const moved = reorderSidebarActivities(ordered, args.id, beforeId, "before");
+
+            if (!moved) {
+              await client.query("COMMIT");
+              return true;
+            }
+
+            next = moved;
+          } else {
+            const without = ordered.filter((activity) => activity.id !== args.id);
+            let lastGroupIndex = -1;
+
+            for (let index = 0; index < without.length; index += 1) {
+              if (without[index].scheduled === current.scheduled) {
+                lastGroupIndex = index;
+              }
+            }
+
+            const moved = [...without];
+            moved.splice(lastGroupIndex + 1, 0, { id: args.id, scheduled: current.scheduled });
+
+            if (moved.every((activity, index) => activity.id === ordered[index]?.id)) {
+              await client.query("COMMIT");
+              return true;
+            }
+
+            next = moved;
+          }
+
+          for (const [position, activity] of next.entries()) {
+            await client.query(
+              `UPDATE activities
+               SET sidebar_position = $1
+               WHERE id = $2 AND itinerary_id = $3`,
+              [position, activity.id, args.itineraryId],
+            );
+          }
+
+          await client.query("COMMIT");
+          return true;
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
       },
       deleteActivity: async (
         _parent,

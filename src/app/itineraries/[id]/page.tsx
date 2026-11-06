@@ -59,6 +59,7 @@ const itineraryQuery = /* GraphQL */ `
         startDate
         startTime
         endTime
+        sidebarPosition
       }
     }
   }
@@ -112,6 +113,7 @@ type ItineraryQuery = {
       startDate: string | null;
       startTime: string | null;
       endTime: string | null;
+      sidebarPosition: number | null;
     }[];
   } | null;
 };
@@ -166,6 +168,7 @@ export default async function ItineraryPage({
       googlePlaceName: activity.googlePlaceName,
       googlePlaceAddress: activity.googlePlaceAddress,
       startDate: activity.startDate,
+      sidebarPosition: activity.sidebarPosition,
     }));
 
   return (
