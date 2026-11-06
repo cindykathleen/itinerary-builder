@@ -118,8 +118,8 @@ function pinColors(place: MapPlace) {
 
   return {
     background: WHITE,
-    borderColor: pinBorderColor(place.color),
-    glyphColor: pinBorderColor(place.color),
+    borderColor: place.color,
+    glyphColor: place.color,
   };
 }
 
