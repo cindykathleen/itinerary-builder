@@ -302,6 +302,8 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  max-height: 30vh;
+  overflow: auto;
 }
 
 .activities {
