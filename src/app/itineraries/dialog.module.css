@@ -451,6 +451,27 @@
   color: var(--text-primary);
 }
 
+.sectionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sectionRow button {
+  flex-shrink: 0;
+}
+
 .dialog .places input {
   width: auto;
   flex: 1 1 144px;

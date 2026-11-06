@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
+import { sectionNames } from "@/lib/sections";
 import { saveItinerarySchedule } from "../actions";
 import dialogStyles from "../dialog.module.css";
 
@@ -38,6 +39,32 @@ function addPlaces(existing: string[], raw: string) {
   return { places, draft };
 }
 
+type PlanningMode = "timeline" | "sections";
+
+type SectionDraft = {
+  key: string;
+  name: string;
+};
+
+function sectionListError(values: string[]) {
+  try {
+    sectionNames(values);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "A section is required.";
+    return message === "A section is required." ? null : message;
+  }
+}
+
+function sectionsAreValid(values: string[]) {
+  try {
+    sectionNames(values);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function SaveButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
@@ -58,13 +85,19 @@ export default function ItineraryScheduleSetup({
   const placeInputRef = useRef<HTMLInputElement>(null);
   const [places, setPlaces] = useState<string[]>([]);
   const [placeDraft, setPlaceDraft] = useState("");
+  const [planningMode, setPlanningMode] = useState<PlanningMode>("timeline");
+  const [sections, setSections] = useState<SectionDraft[]>([{ key: "section-1", name: "" }]);
+  const [nextSectionKey, setNextSectionKey] = useState(2);
   const [dayStart, setDayStart] = useState("");
   const [dayEnd, setDayEnd] = useState("");
   const [timeInterval, setTimeInterval] = useState("");
   const timeRangeError = isEndTimeBeforeStart(dayStart, dayEnd);
   const hasPlace = places.length > 0 || placeDraft.trim() !== "";
-  const fieldsFilled = hasPlace && dayStart !== "" && dayEnd !== "" && timeInterval !== "";
-  const canSubmit = fieldsFilled && !timeRangeError;
+  const sectionError = sectionListError(sections.map((section) => section.name));
+  const timelineReady = dayStart !== "" && dayEnd !== "" && timeInterval !== "" && !timeRangeError;
+  const canSubmit =
+    hasPlace &&
+    (planningMode === "timeline" ? timelineReady : sectionsAreValid(sections.map((section) => section.name)));
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -205,6 +238,126 @@ export default function ItineraryScheduleSetup({
             </div>
           </div>
 
+          <fieldset className={dialogStyles.fieldset}>
+            <legend>
+              Planning style <span className="required">*</span>
+            </legend>
+            <p className={dialogStyles.note}>This choice is locked after you save.</p>
+            <div className={dialogStyles.choices}>
+              <label className={dialogStyles.choice}>
+                <input
+                  type="radio"
+                  name="planningMode"
+                  value="timeline"
+                  checked={planningMode === "timeline"}
+                  onChange={() => setPlanningMode("timeline")}
+                />
+                Timeline
+              </label>
+              <label className={dialogStyles.choice}>
+                <input
+                  type="radio"
+                  name="planningMode"
+                  value="sections"
+                  checked={planningMode === "sections"}
+                  onChange={() => setPlanningMode("sections")}
+                />
+                Sections
+              </label>
+            </div>
+          </fieldset>
+
+          {planningMode === "sections" ? (
+            <div className={dialogStyles.field}>
+              <span id="schedule-sections-label">
+                Sections <span className="required">*</span>
+              </span>
+              <p id="schedule-sections-help" className={dialogStyles.note}>
+                Use names like Morning, Afternoon, and Night when the plan should stay loose.
+              </p>
+              <div className={dialogStyles.sectionList} role="group" aria-labelledby="schedule-sections-label">
+                {sections.map((section, index) => (
+                  <div key={section.key} className={dialogStyles.sectionRow}>
+                    <input
+                      name="sections"
+                      type="text"
+                      value={section.name}
+                      maxLength={40}
+                      aria-label={`Section ${index + 1}`}
+                      aria-describedby="schedule-sections-help"
+                      onChange={(event) =>
+                        setSections((current) =>
+                          current.map((item) =>
+                            item.key === section.key ? { ...item, name: event.target.value } : item,
+                          ),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Move section ${index + 1} up`}
+                      disabled={index === 0}
+                      onClick={() =>
+                        setSections((current) => {
+                          const next = [...current];
+                          const [item] = next.splice(index, 1);
+                          next.splice(index - 1, 0, item);
+                          return next;
+                        })
+                      }
+                    >
+                      Up
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move section ${index + 1} down`}
+                      disabled={index === sections.length - 1}
+                      onClick={() =>
+                        setSections((current) => {
+                          const next = [...current];
+                          const [item] = next.splice(index, 1);
+                          next.splice(index + 1, 0, item);
+                          return next;
+                        })
+                      }
+                    >
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove section ${index + 1}`}
+                      disabled={sections.length === 1}
+                      onClick={() =>
+                        setSections((current) => current.filter((item) => item.key !== section.key))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {sectionError ? (
+                <p className={dialogStyles.hint} role="alert">
+                  {sectionError}
+                </p>
+              ) : null}
+              <button
+                className="secondary"
+                type="button"
+                disabled={sections.length >= 12}
+                onClick={() => {
+                  const key = `section-${nextSectionKey}`;
+                  setNextSectionKey((current) => current + 1);
+                  setSections((current) => [...current, { key, name: "" }]);
+                }}
+              >
+                Add section
+              </button>
+            </div>
+          ) : null}
+
+          {planningMode === "timeline" ? (
+          <>
           <div className={dialogStyles.field}>
             <label htmlFor="schedule-day-start">
               Day start <span className="required">*</span>
@@ -277,6 +430,8 @@ export default function ItineraryScheduleSetup({
               </label>
             </div>
           </fieldset>
+          </>
+          ) : null}
         </div>
 
         <div className={dialogStyles.actions}>

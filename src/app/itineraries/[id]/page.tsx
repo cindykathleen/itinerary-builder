@@ -6,6 +6,7 @@ import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
 import ItineraryMap from "./ItineraryMap";
 import ItineraryScheduleSetup from "./ItineraryScheduleSetup";
+import ItinerarySections from "./ItinerarySections";
 import ItineraryTimeline from "./ItineraryTimeline";
 import ItineraryViewToggle from "./ItineraryViewToggle";
 import styles from "./page.module.css";
@@ -22,6 +23,12 @@ const itineraryQuery = /* GraphQL */ `
       timeInterval
       timeFormat
       scheduleConfigured
+      planningMode
+      sections {
+        id
+        name
+        position
+      }
       daySettings {
         date
         heading
@@ -59,6 +66,9 @@ const itineraryQuery = /* GraphQL */ `
         startDate
         startTime
         endTime
+        sectionId
+        sectionDate
+        position
         sidebarPosition
       }
     }
@@ -76,6 +86,12 @@ type ItineraryQuery = {
     timeInterval: number;
     timeFormat: string;
     scheduleConfigured: boolean;
+    planningMode: "timeline" | "sections";
+    sections: {
+      id: string;
+      name: string;
+      position: number;
+    }[];
     daySettings: {
       date: string;
       heading: string | null;
@@ -113,6 +129,9 @@ type ItineraryQuery = {
       startDate: string | null;
       startTime: string | null;
       endTime: string | null;
+      sectionId: string | null;
+      sectionDate: string | null;
+      position: number | null;
       sidebarPosition: number | null;
     }[];
   } | null;
@@ -214,7 +233,10 @@ export default async function ItineraryPage({
                 .map((activity) => ({
                   id: activity.id,
                   name: activity.name,
-                  onTimeline: Boolean(activity.startDate && activity.startTime && activity.endTime),
+                  onTimeline: Boolean(
+                    (activity.startDate && activity.startTime && activity.endTime) ||
+                      activity.sectionId,
+                  ),
                 }))
                 .sort(
                   (left, right) =>
@@ -238,7 +260,41 @@ export default async function ItineraryPage({
         </section>
       )}
 
-      {itinerary.scheduleConfigured ? (
+      {itinerary.scheduleConfigured && itinerary.planningMode === "sections" ? (
+        <ItinerarySections
+          itineraryId={itinerary.id}
+          dateStart={itinerary.dateStart}
+          dateEnd={itinerary.dateEnd}
+          sections={itinerary.sections.map((section) => ({
+            id: section.id,
+            name: section.name,
+            position: section.position,
+          }))}
+          categories={categories}
+          stops={stops}
+          daySettings={itinerary.daySettings.map((day) => ({
+            date: day.date.slice(0, 10),
+            heading: day.heading,
+          }))}
+          activities={itinerary.activities.map((activity) => ({
+            id: activity.id,
+            name: activity.name,
+            note: activity.note,
+            categoryId: activity.categoryId,
+            stopId: activity.stopId,
+            googlePlaceId: activity.googlePlaceId,
+            googlePlaceName: activity.googlePlaceName,
+            googlePlaceAddress: activity.googlePlaceAddress,
+            color:
+              categories.find((category) => category.id === activity.categoryId)?.color ??
+              "#E0E6ED",
+            inSidebar: activity.inSidebar,
+            sectionId: activity.sectionId,
+            sectionDate: activity.sectionDate?.slice(0, 10) ?? null,
+            position: activity.position,
+          }))}
+        />
+      ) : itinerary.scheduleConfigured ? (
         <ItineraryTimeline
           itineraryId={itinerary.id}
           dateStart={itinerary.dateStart}

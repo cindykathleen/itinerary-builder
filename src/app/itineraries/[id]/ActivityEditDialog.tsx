@@ -38,12 +38,14 @@ export default function ActivityEditDialog({
   categories,
   stops,
   openToken,
+  placedInSection = false,
 }: {
   itineraryId: string;
   activity: EditableActivity;
   categories: CategoryOption[];
   stops: StopOption[];
   openToken: number;
+  placedInSection?: boolean;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const activityRef = useRef(activity);
@@ -59,7 +61,7 @@ export default function ActivityEditDialog({
   const [stopId, setStopId] = useState(activity.stopId ?? "");
   const [addToSidebar, setAddToSidebar] = useState(false);
   const [placeEditorKey, setPlaceEditorKey] = useState(0);
-  const showPlaceFields = activity.inSidebar || addToSidebar;
+  const showPlaceFields = placedInSection || activity.inSidebar || addToSidebar;
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
 
@@ -174,7 +176,9 @@ export default function ActivityEditDialog({
             />
           </div>
 
-          {activity.inSidebar ? null : (
+          {placedInSection ? (
+            <input type="hidden" name="inSidebar" value="false" />
+          ) : activity.inSidebar ? null : (
             <>
               <input type="hidden" name="inSidebar" value={addToSidebar ? "true" : "false"} />
               <label className={dialogStyles.choice} htmlFor={sidebarFieldId}>

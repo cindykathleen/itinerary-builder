@@ -26,6 +26,7 @@ export type ActivitySlot = {
   startTime: string;
   endTime: string;
   label: string;
+  sectionId?: string;
 };
 
 export default function ActivityCreate({
@@ -53,12 +54,13 @@ export default function ActivityCreate({
   const stopFieldId = useId();
   const sidebarFieldId = useId();
   const fromTimeline = slot !== null;
+  const inSection = Boolean(slot?.sectionId);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [stopId, setStopId] = useState(defaultStopId ?? "");
   const [addToSidebar, setAddToSidebar] = useState(false);
-  const showPlaceFields = !fromTimeline || addToSidebar;
+  const showPlaceFields = !fromTimeline || addToSidebar || inSection;
   const placeCategories = categoriesForStop(categories, stopId);
   const canSubmit = name.trim() !== "";
 
@@ -141,8 +143,14 @@ export default function ActivityCreate({
             <>
               <p className={dialogStyles.when}>{slot.label}</p>
               <input type="hidden" name="date" value={slot.date} />
-              <input type="hidden" name="startTime" value={slot.startTime} />
-              <input type="hidden" name="endTime" value={slot.endTime} />
+              {slot.sectionId ? (
+                <input type="hidden" name="sectionId" value={slot.sectionId} />
+              ) : (
+                <>
+                  <input type="hidden" name="startTime" value={slot.startTime} />
+                  <input type="hidden" name="endTime" value={slot.endTime} />
+                </>
+              )}
             </>
           ) : null}
 
@@ -173,7 +181,9 @@ export default function ActivityCreate({
             />
           </div>
 
-          {fromTimeline ? (
+          {inSection ? <input type="hidden" name="inSidebar" value="false" /> : null}
+
+          {fromTimeline && !inSection ? (
             <>
               <input type="hidden" name="inSidebar" value={addToSidebar ? "true" : "false"} />
               <label className={dialogStyles.choice} htmlFor={sidebarFieldId}>

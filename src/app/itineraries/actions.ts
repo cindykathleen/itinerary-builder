@@ -339,6 +339,7 @@ const createActivityMutation = /* GraphQL */ `
     $date: String
     $startTime: String
     $endTime: String
+    $sectionId: ID
   ) {
     createActivity(
       itineraryId: $itineraryId
@@ -352,6 +353,7 @@ const createActivityMutation = /* GraphQL */ `
       date: $date
       startTime: $startTime
       endTime: $endTime
+      sectionId: $sectionId
     ) {
       id
       name
@@ -373,6 +375,7 @@ export async function createActivity(formData: FormData) {
   const date = String(formData.get("date") ?? "").trim();
   const startTime = String(formData.get("startTime") ?? "").trim();
   const endTime = String(formData.get("endTime") ?? "").trim();
+  const sectionId = String(formData.get("sectionId") ?? "").trim();
   const inSidebar = formData.get("inSidebar") !== "false";
 
   await executeGraphQL(createActivityMutation, {
@@ -387,6 +390,7 @@ export async function createActivity(formData: FormData) {
     date: date || null,
     startTime: startTime || null,
     endTime: endTime || null,
+    sectionId: sectionId || null,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }
@@ -490,6 +494,35 @@ const unscheduleActivityMutation = /* GraphQL */ `
 
 export async function unscheduleActivity(input: { itineraryId: string; id: string }) {
   await executeGraphQL(unscheduleActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
+
+const placeActivityInSectionMutation = /* GraphQL */ `
+  mutation PlaceActivityInSection(
+    $id: ID!
+    $itineraryId: ID!
+    $date: String!
+    $sectionId: ID!
+    $position: Int!
+  ) {
+    placeActivityInSection(
+      id: $id
+      itineraryId: $itineraryId
+      date: $date
+      sectionId: $sectionId
+      position: $position
+    )
+  }
+`;
+
+export async function placeActivityInSection(input: {
+  itineraryId: string;
+  id: string;
+  date: string;
+  sectionId: string;
+  position: number;
+}) {
+  await executeGraphQL(placeActivityInSectionMutation, input);
   revalidatePath(`/itineraries/${input.itineraryId}`);
 }
 

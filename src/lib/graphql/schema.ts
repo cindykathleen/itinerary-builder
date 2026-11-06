@@ -1,5 +1,6 @@
 import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
+import type { PoolClient } from "pg";
 import pool from "@/lib/db";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
 import { reorderSidebarActivities } from "@/lib/sidebar-order";
@@ -123,6 +124,28 @@ function parseTime(value: string) {
   }
 
   return time;
+}
+
+async function compactSectionPositions(
+  client: PoolClient,
+  sectionId: string,
+  sectionDate: string,
+) {
+  await client.query(
+    `WITH ordered AS (
+       SELECT id,
+              ROW_NUMBER() OVER (ORDER BY position, id) - 1 AS next_position
+       FROM activities
+       WHERE section_id = $1
+         AND section_date = $2
+     )
+     UPDATE activities
+     SET position = ordered.next_position
+     FROM ordered
+     WHERE activities.id = ordered.id
+       AND activities.position IS DISTINCT FROM ordered.next_position`,
+    [sectionId, sectionDate],
+  );
 }
 
 function addUtcDays(iso: string, days: number) {
@@ -418,6 +441,7 @@ export const schema = createSchema({
         date: String
         startTime: String
         endTime: String
+        sectionId: ID
       ): Activity!
       updateActivity(
         id: ID!
@@ -437,6 +461,13 @@ export const schema = createSchema({
         endTime: String!
       ): Boolean!
       unscheduleActivity(id: ID!, itineraryId: ID!): Boolean!
+      placeActivityInSection(
+        id: ID!
+        itineraryId: ID!
+        date: String!
+        sectionId: ID!
+        position: Int!
+      ): Boolean!
       reorderSidebarActivity(id: ID!, itineraryId: ID!, beforeId: ID): Boolean!
       deleteActivity(id: ID!): Boolean!
     }
@@ -1486,6 +1517,7 @@ export const schema = createSchema({
           date?: string | null;
           startTime?: string | null;
           endTime?: string | null;
+          sectionId?: string | null;
         },
         context: GraphQLContext,
       ) => {
@@ -1520,13 +1552,15 @@ export const schema = createSchema({
           day_end: string;
           time_interval: number;
           timezone: string;
+          planning_mode: "timeline" | "sections";
         }>(
           `SELECT date_start::text AS date_start,
                   date_end::text AS date_end,
                   day_start::text AS day_start,
                   day_end::text AS day_end,
                   time_interval,
-                  timezone
+                  timezone,
+                  planning_mode
            FROM itineraries
            WHERE id = $1 AND owner_id = $2`,
           [args.itineraryId, context.userId],
@@ -1541,11 +1575,55 @@ export const schema = createSchema({
         }
 
         const scheduleDate = args.date?.trim() ?? "";
+        const sectionId = args.sectionId?.trim() || null;
         const scheduling = scheduleDate !== "" || Boolean(args.startTime) || Boolean(args.endTime);
+
+        if (sectionId && itinerary.planning_mode !== "sections") {
+          throw new GraphQLError("This itinerary is planned on a timeline.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (sectionId && (args.startTime || args.endTime)) {
+          throw new GraphQLError("Choose a section on this itinerary.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        if (!sectionId && scheduling && itinerary.planning_mode === "sections") {
+          throw new GraphQLError("This itinerary is planned in sections.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
         let startTime: string | null = null;
         let endTime: string | null = null;
 
-        if (scheduling) {
+        let sectionDate: string | null = null;
+
+        if (sectionId) {
+          sectionDate = parseIsoDate(scheduleDate);
+          const section = sectionDate
+            ? await pool.query(
+                `SELECT id
+                 FROM itinerary_sections
+                 WHERE id = $1 AND itinerary_id = $2`,
+                [sectionId, args.itineraryId],
+              )
+            : null;
+
+          if (
+            !sectionDate ||
+            !section?.rows[0] ||
+            sectionDate < itinerary.date_start ||
+            sectionDate > itinerary.date_end
+          ) {
+            throw new GraphQLError("Choose a section on this itinerary.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+        }
+
+        if (scheduling && !sectionId) {
           const date = parseIsoDate(scheduleDate);
           startTime = args.startTime ? parseTime(args.startTime) : null;
           endTime = args.endTime ? parseTime(args.endTime) : null;
@@ -1598,6 +1676,58 @@ export const schema = createSchema({
           args.googlePlaceId,
           args.sessionToken,
         );
+
+        if (sectionId && sectionDate) {
+          const placed = await pool.query<{
+            id: string;
+            name: string;
+            note: string | null;
+            category_id: string | null;
+            stop_id: string | null;
+          }>(
+            `INSERT INTO activities (
+               itinerary_id, category_id, stop_id, place_id, name, note,
+               section_id, section_date, position, in_sidebar
+             )
+             VALUES (
+               $1,
+               $2,
+               $3,
+               $4,
+               $5,
+               $6,
+               $7,
+               $8,
+               (
+                 SELECT COALESCE(MAX(position), -1) + 1
+                 FROM activities
+                 WHERE section_id = $7
+                   AND section_date = $8
+               ),
+               false
+             )
+             RETURNING id, name, note, category_id, stop_id`,
+            [
+              args.itineraryId,
+              categoryId,
+              stopId,
+              placeId,
+              name,
+              note || null,
+              sectionId,
+              sectionDate,
+            ],
+          );
+          const activity = placed.rows[0];
+
+          return {
+            id: activity.id,
+            name: activity.name,
+            note: activity.note,
+            categoryId: activity.category_id,
+            stopId: activity.stop_id,
+          };
+        }
 
         const result = await pool.query<{
           id: string;
@@ -1965,6 +2095,72 @@ export const schema = createSchema({
           });
         }
 
+        const existing = await pool.query<{
+          planning_mode: "timeline" | "sections";
+          section_id: string | null;
+          section_date: string | null;
+        }>(
+          `SELECT itineraries.planning_mode,
+                  activities.section_id,
+                  activities.section_date::text AS section_date
+           FROM activities
+           JOIN itineraries ON itineraries.id = activities.itinerary_id
+           WHERE activities.id = $1
+             AND activities.itinerary_id = $2
+             AND itineraries.owner_id = $3`,
+          [args.id, args.itineraryId, context.userId],
+        );
+        const current = existing.rows[0];
+
+        if (!current) {
+          throw new GraphQLError("Activity not found.", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        if (current.planning_mode === "sections") {
+          const client = await pool.connect();
+
+          try {
+            await client.query("BEGIN");
+            await client.query(
+              `UPDATE activities
+               SET section_id = NULL,
+                   section_date = NULL,
+                   position = NULL,
+                   start_at = NULL,
+                   end_at = NULL,
+                   in_sidebar = true,
+                   sidebar_position = (
+                     SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
+                     FROM activities AS siblings
+                     WHERE siblings.itinerary_id = activities.itinerary_id
+                       AND siblings.category_id IS NOT DISTINCT FROM activities.category_id
+                       AND siblings.in_sidebar = true
+                       AND siblings.id <> activities.id
+                       AND siblings.start_at IS NULL
+                       AND siblings.section_id IS NULL
+                   ),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = $1
+                 AND itinerary_id = $2`,
+              [args.id, args.itineraryId],
+            );
+
+            if (current.section_id && current.section_date) {
+              await compactSectionPositions(client, current.section_id, current.section_date);
+            }
+
+            await client.query("COMMIT");
+            return true;
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          } finally {
+            client.release();
+          }
+        }
+
         const result = await pool.query(
           `UPDATE activities
            SET start_at = NULL,
@@ -1998,6 +2194,173 @@ export const schema = createSchema({
         }
 
         return true;
+      },
+      placeActivityInSection: async (
+        _parent,
+        args: {
+          id: string;
+          itineraryId: string;
+          date: string;
+          sectionId: string;
+          position: number;
+        },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to edit activities.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const date = parseIsoDate(args.date);
+        const sectionId = args.sectionId.trim();
+
+        if (!date || !sectionId || !Number.isInteger(args.position) || args.position < 0) {
+          throw new GraphQLError("Choose a section on this itinerary.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+          const itineraryResult = await client.query<{
+            planning_mode: "timeline" | "sections";
+            date_start: string;
+            date_end: string;
+          }>(
+            `SELECT planning_mode, date_start::text AS date_start, date_end::text AS date_end
+             FROM itineraries
+             WHERE id = $1 AND owner_id = $2
+             FOR UPDATE`,
+            [args.itineraryId, context.userId],
+          );
+          const itinerary = itineraryResult.rows[0];
+
+          if (!itinerary) {
+            throw new GraphQLError("Itinerary not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          if (itinerary.planning_mode !== "sections") {
+            throw new GraphQLError("This itinerary is planned on a timeline.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          if (date < itinerary.date_start || date > itinerary.date_end) {
+            throw new GraphQLError("Choose a section on this itinerary.", {
+              extensions: { code: "BAD_USER_INPUT" },
+            });
+          }
+
+          const section = await client.query(
+            `SELECT id
+             FROM itinerary_sections
+             WHERE id = $1 AND itinerary_id = $2`,
+            [sectionId, args.itineraryId],
+          );
+
+          if (!section.rows[0]) {
+            throw new GraphQLError("Section not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          const activityResult = await client.query<{
+            section_id: string | null;
+            section_date: string | null;
+            in_sidebar: boolean;
+          }>(
+            `SELECT section_id, section_date::text AS section_date, in_sidebar
+             FROM activities
+             WHERE id = $1 AND itinerary_id = $2
+             FOR UPDATE`,
+            [args.id, args.itineraryId],
+          );
+          const activity = activityResult.rows[0];
+
+          if (!activity) {
+            throw new GraphQLError("Activity not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          const cell = await client.query<{ id: string }>(
+            `SELECT id
+             FROM activities
+             WHERE section_id = $1 AND section_date = $2
+             ORDER BY position, id`,
+            [sectionId, date],
+          );
+          const currentIds = cell.rows.map((row) => row.id);
+          const without = currentIds.filter((id) => id !== args.id);
+          const index = Math.min(args.position, without.length);
+          const nextIds = [...without.slice(0, index), args.id, ...without.slice(index)];
+          const unchanged =
+            !activity.in_sidebar &&
+            activity.section_id === sectionId &&
+            activity.section_date === date &&
+            currentIds.length === nextIds.length &&
+            currentIds.every((id, itemIndex) => id === nextIds[itemIndex]);
+
+          if (unchanged) {
+            await client.query("COMMIT");
+            return true;
+          }
+
+          await client.query(
+            `UPDATE activities
+             SET section_id = NULL,
+                 section_date = NULL,
+                 position = NULL
+             WHERE id = $1`,
+            [args.id],
+          );
+
+          if (
+            activity.section_id &&
+            activity.section_date &&
+            (activity.section_id !== sectionId || activity.section_date !== date)
+          ) {
+            await compactSectionPositions(client, activity.section_id, activity.section_date);
+          }
+
+          if (activity.section_id === sectionId && activity.section_date === date) {
+            await compactSectionPositions(client, sectionId, date);
+          }
+
+          await client.query(
+            `UPDATE activities
+             SET position = position + 1
+             WHERE section_id = $1
+               AND section_date = $2
+               AND position >= $3`,
+            [sectionId, date, index],
+          );
+          await client.query(
+            `UPDATE activities
+             SET section_id = $2,
+                 section_date = $3,
+                 position = $4,
+                 start_at = NULL,
+                 end_at = NULL,
+                 in_sidebar = false,
+                 sidebar_position = NULL,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [args.id, sectionId, date, index],
+          );
+          await client.query("COMMIT");
+          return true;
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
       },
       reorderSidebarActivity: async (
         _parent,
