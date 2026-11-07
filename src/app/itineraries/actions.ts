@@ -156,9 +156,10 @@ const updateItineraryMutation = /* GraphQL */ `
     $name: String!
     $dateStart: String!
     $dateEnd: String!
-    $dayStart: String!
-    $dayEnd: String!
-    $timeInterval: Int!
+    $dayStart: String
+    $dayEnd: String
+    $timeInterval: Int
+    $sections: [ItinerarySectionInput!]
   ) {
     updateItinerary(
       id: $id
@@ -168,6 +169,7 @@ const updateItineraryMutation = /* GraphQL */ `
       dayStart: $dayStart
       dayEnd: $dayEnd
       timeInterval: $timeInterval
+      sections: $sections
     ) {
       id
       name
@@ -180,18 +182,28 @@ export async function updateItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const dateStart = String(formData.get("dateStart") ?? "");
   const dateEnd = String(formData.get("dateEnd") ?? "");
+  const planningMode = formData.get("planningMode") === "sections" ? "sections" : "timeline";
   const dayStart = String(formData.get("dayStart") ?? "");
   const dayEnd = String(formData.get("dayEnd") ?? "");
   const timeInterval = Number(formData.get("timeInterval"));
+  const sectionNames = formData.getAll("sections").map((value) => String(value));
+  const sectionIds = formData.getAll("sectionIds").map((value) => String(value));
 
   await executeGraphQL(updateItineraryMutation, {
     id,
     name,
     dateStart,
     dateEnd,
-    dayStart,
-    dayEnd,
-    timeInterval,
+    dayStart: planningMode === "timeline" ? dayStart : null,
+    dayEnd: planningMode === "timeline" ? dayEnd : null,
+    timeInterval: planningMode === "timeline" ? timeInterval : null,
+    sections:
+      planningMode === "sections"
+        ? sectionNames.map((sectionName, index) => ({
+            id: sectionIds[index] || null,
+            name: sectionName,
+          }))
+        : null,
   });
   revalidatePath("/itineraries");
   revalidatePath(`/itineraries/${id}`);

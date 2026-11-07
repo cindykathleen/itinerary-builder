@@ -209,6 +209,12 @@ export default async function ItineraryPage({
               dayStart: itinerary.dayStart,
               dayEnd: itinerary.dayEnd,
               timeInterval: itinerary.timeInterval,
+              planningMode: itinerary.planningMode,
+              sections: itinerary.sections.map((section) => ({
+                id: section.id,
+                name: section.name,
+                position: section.position,
+              })),
             }}
           />
           <ItineraryViewToggle itineraryId={itinerary.id} view={view} />
