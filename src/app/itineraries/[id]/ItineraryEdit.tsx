@@ -7,6 +7,7 @@ import { sectionNames } from "@/lib/sections";
 import { updateItinerary } from "../actions";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import SectionListEditor from "../SectionListEditor";
 import styles from "./page.module.css";
 
 function isEndDateBeforeStart(start: string, end: string) {
@@ -249,85 +250,24 @@ export default function ItineraryEdit({
                   Planning style cannot be changed. Use names like Morning, Afternoon, and Night
                   when the plan should stay loose.
                 </p>
-                <div className={dialogStyles.sectionList} role="group" aria-labelledby="edit-sections-label">
-                  {sections.map((section, index) => (
-                    <div key={section.key} className={dialogStyles.sectionRow}>
-                      <input type="hidden" name="sectionIds" value={section.id ?? ""} />
-                      <input
-                        name="sections"
-                        type="text"
-                        value={section.name}
-                        maxLength={40}
-                        aria-label={`Section ${index + 1}`}
-                        aria-describedby="edit-sections-help"
-                        onChange={(event) =>
-                          setSections((current) =>
-                            current.map((item) =>
-                              item.key === section.key ? { ...item, name: event.target.value } : item,
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        aria-label={`Move section ${index + 1} up`}
-                        disabled={index === 0}
-                        onClick={() =>
-                          setSections((current) => {
-                            const next = [...current];
-                            const [item] = next.splice(index, 1);
-                            next.splice(index - 1, 0, item);
-                            return next;
-                          })
-                        }
-                      >
-                        Up
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Move section ${index + 1} down`}
-                        disabled={index === sections.length - 1}
-                        onClick={() =>
-                          setSections((current) => {
-                            const next = [...current];
-                            const [item] = next.splice(index, 1);
-                            next.splice(index + 1, 0, item);
-                            return next;
-                          })
-                        }
-                      >
-                        Down
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Remove section ${index + 1}`}
-                        disabled={sections.length === 1}
-                        onClick={() =>
-                          setSections((current) => current.filter((item) => item.key !== section.key))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <SectionListEditor
+                  sections={sections}
+                  labelledBy="edit-sections-label"
+                  describedBy="edit-sections-help"
+                  withIds
+                  canAdd={sections.length < 12}
+                  onChange={setSections}
+                  onAdd={() => {
+                    const key = `section-${nextSectionKey}`;
+                    setNextSectionKey((current) => current + 1);
+                    setSections((current) => [...current, { key, id: null, name: "" }]);
+                  }}
+                />
                 {sectionError ? (
                   <p className={dialogStyles.hint} role="alert">
                     {sectionError}
                   </p>
                 ) : null}
-                <button
-                  className="secondary"
-                  type="button"
-                  disabled={sections.length >= 12}
-                  onClick={() => {
-                    const key = `section-${nextSectionKey}`;
-                    setNextSectionKey((current) => current + 1);
-                    setSections((current) => [...current, { key, id: null, name: "" }]);
-                  }}
-                >
-                  Add section
-                </button>
               </div>
             ) : (
             <>
