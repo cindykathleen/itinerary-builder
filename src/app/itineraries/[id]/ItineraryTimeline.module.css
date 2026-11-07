@@ -50,13 +50,13 @@
 
 .corner {
   top: 0;
-  z-index: 5;
+  z-index: 15;
 }
 
 .day {
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 14;
   min-width: 152px;
   padding: 16px;
   background-color: var(--foreground);
