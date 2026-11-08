@@ -5,7 +5,7 @@ import pool from "@/lib/db";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
 import { reorderSidebarActivities } from "@/lib/sidebar-order";
 import { sectionNames } from "@/lib/sections";
-import { clockTime } from "@/lib/timeline";
+import { clockTime, validScheduleRange } from "@/lib/timeline";
 import type { GraphQLContext } from "./context";
 
 type ItineraryRow = {
@@ -354,40 +354,6 @@ function parseScheduleEnd(value: string) {
   return { extraDays: Math.floor(hours / 24), time };
 }
 
-function minutesFromTime(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function validScheduleRange(
-  dayStart: string,
-  dayEnd: string,
-  interval: number,
-  startTime: string,
-  endTime: string,
-) {
-  if (interval !== 30 && interval !== 60) {
-    return false;
-  }
-
-  const start = minutesFromTime(dayStart);
-  const end = minutesFromTime(dayEnd);
-  const slot = minutesFromTime(startTime);
-  const finish = minutesFromTime(endTime);
-  const latest = end + interval;
-  const onGrid = (slot - start) % interval === 0;
-
-  if (slot < start || slot > end || (slot !== end && !onGrid)) {
-    return false;
-  }
-
-  if (finish <= slot || finish > latest) {
-    return false;
-  }
-
-  return finish === end || finish === latest || (finish - start) % interval === 0;
-}
-
 function parseHexColor(value: string) {
   const digits = value.trim().replace(/^#/, "");
 
@@ -561,6 +527,7 @@ export const schema = createSchema({
       sectionDate: String
       position: Int
       sidebarPosition: Int
+      createdAt: String!
     }
 
     type Query {
@@ -770,6 +737,7 @@ export const schema = createSchema({
           section_date: string | null;
           position: number | null;
           sidebar_position: number | null;
+          created_at: string;
         }>(
           `SELECT activities.id,
                   activities.name,
@@ -787,7 +755,8 @@ export const schema = createSchema({
                   activities.section_id,
                   activities.section_date::text AS section_date,
                   activities.position,
-                  activities.sidebar_position
+                  activities.sidebar_position,
+                  to_char(activities.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
            FROM activities
            JOIN itineraries ON itineraries.id = activities.itinerary_id
            LEFT JOIN places ON places.id = activities.place_id
@@ -817,6 +786,7 @@ export const schema = createSchema({
           position: activity.position === null ? null : Number(activity.position),
           sidebarPosition:
             activity.sidebar_position === null ? null : Number(activity.sidebar_position),
+          createdAt: activity.created_at,
         }));
       },
     },
@@ -2302,6 +2272,7 @@ export const schema = createSchema({
             Number(itinerary.time_interval),
             startTime,
             parsedEnd.time,
+            parsedEnd.extraDays,
           ) ||
           date < itinerary.date_start ||
           endDate > itinerary.date_end

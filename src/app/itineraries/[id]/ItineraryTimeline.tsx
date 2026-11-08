@@ -1099,6 +1099,7 @@ export default function ItineraryTimeline({
         style={{
           gridTemplateColumns: `96px repeat(${days.length}, minmax(152px, 1fr))`,
           gridTemplateRows: `auto repeat(${slots.length}, 40px)`,
+          minWidth: `calc(96px + ${days.length} * 152px)`,
         }}
       >
         <div className={styles.corner}>

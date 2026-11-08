@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useActivityHighlight } from "./ActivityHighlight";
 import { loadGoogleMaps } from "./load-google-maps";
 import styles from "./page.module.css";
@@ -191,11 +192,57 @@ function markerContent(place: MapPlace, onAdd: (activityId: string) => void) {
   return { name, body };
 }
 
+function MapStopSwitcher({
+  itineraryId,
+  stops,
+  stopId,
+}: {
+  itineraryId: string;
+  stops: { id: string; name: string }[];
+  stopId: string | null;
+}) {
+  const router = useRouter();
+
+  const select = (next: string | null) => {
+    const params = new URLSearchParams({ view: "map" });
+
+    if (next) {
+      params.set("stop", next);
+    }
+
+    router.push(`/itineraries/${itineraryId}?${params.toString()}`);
+  };
+
+  return (
+    <div className={styles.mapStops} role="group" aria-label="Stops">
+      <button type="button" aria-pressed={stopId === null} onClick={() => select(null)}>
+        All
+      </button>
+      {stops.map((stop) => (
+        <button
+          key={stop.id}
+          type="button"
+          aria-pressed={stopId === stop.id}
+          onClick={() => select(stop.id)}
+        >
+          {stop.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ItineraryMap({
   apiKey,
+  itineraryId,
+  stops,
+  stopId,
   places,
 }: {
   apiKey: string;
+  itineraryId: string;
+  stops: { id: string; name: string }[];
+  stopId: string | null;
   places: MapPlace[];
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -390,16 +437,28 @@ export default function ItineraryMap({
   }, [highlight?.hoveredId, highlight?.hoveredPlaceId, highlight?.source, mapReady, places]);
 
   if (!apiKey) {
-    return <p className={styles.mapStatus}>Google Maps is not configured.</p>;
+    return (
+      <>
+        <MapStopSwitcher itineraryId={itineraryId} stops={stops} stopId={stopId} />
+        <div className={styles.mapStage}>
+          <p className={styles.mapStatus}>Google Maps is not configured.</p>
+        </div>
+      </>
+    );
   }
+
+  const emptyMessage = stopId
+    ? "No places on this stop yet."
+    : "Link an activity to Google Maps to see it here.";
 
   return (
     <>
-      <div ref={canvasRef} className={styles.mapCanvas} />
-      {error ? <p className={styles.mapStatus}>{error}</p> : null}
-      {!error && places.length === 0 ? (
-        <p className={styles.mapNote}>Link an activity to Google Maps to see it here.</p>
-      ) : null}
+      <MapStopSwitcher itineraryId={itineraryId} stops={stops} stopId={stopId} />
+      <div className={styles.mapStage}>
+        <div ref={canvasRef} className={styles.mapCanvas} />
+        {error ? <p className={styles.mapStatus}>{error}</p> : null}
+        {!error && places.length === 0 ? <p className={styles.mapNote}>{emptyMessage}</p> : null}
+      </div>
     </>
   );
 }

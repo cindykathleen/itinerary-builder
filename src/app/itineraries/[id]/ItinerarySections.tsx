@@ -262,7 +262,10 @@ export default function ItinerarySections({
     <section ref={boardRef} className={styles.board} aria-label="Sections">
       <div
         className={styles.grid}
-        style={{ gridTemplateColumns: `120px repeat(${days.length}, minmax(160px, 1fr))` }}
+        style={{
+          gridTemplateColumns: `120px repeat(${days.length}, minmax(160px, 1fr))`,
+          minWidth: `calc(120px + ${days.length} * 160px)`,
+        }}
       >
         <div className={styles.corner} />
         {days.map((day, column) => (

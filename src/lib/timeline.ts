@@ -64,6 +64,43 @@ export function toMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
+export function validScheduleRange(
+  dayStart: string,
+  dayEnd: string,
+  interval: number,
+  startTime: string,
+  endTime: string,
+  extraDays = 0,
+) {
+  if (interval !== 30 && interval !== 60) {
+    return false;
+  }
+
+  const start = toMinutes(dayStart);
+  const end = toMinutes(dayEnd);
+  const slot = toMinutes(startTime);
+  const finish = toMinutes(endTime);
+
+  if (start === null || end === null || slot === null || finish === null) {
+    return false;
+  }
+
+  const latest = end + interval;
+  const onGrid = (slot - start) % interval === 0;
+
+  if (slot < start || slot > end || (slot !== end && !onGrid)) {
+    return false;
+  }
+
+  const earliestFinish = extraDays > 0 ? start : slot;
+
+  if (finish <= earliestFinish || finish > latest) {
+    return false;
+  }
+
+  return finish === end || finish === latest || (finish - start) % interval === 0;
+}
+
 export function listSlots(start: string, end: string, interval: number) {
   const startMinutes = toMinutes(start);
   const endMinutes = toMinutes(end);

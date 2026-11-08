@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import { placesForStop } from "@/lib/map-stops";
 import { ActivityHighlightProvider } from "./ActivityHighlight";
 import ActivitySidebar from "./ActivitySidebar";
 import ItineraryEdit from "./ItineraryEdit";
@@ -70,6 +71,7 @@ const itineraryQuery = /* GraphQL */ `
         sectionDate
         position
         sidebarPosition
+        createdAt
       }
     }
   }
@@ -133,6 +135,7 @@ type ItineraryQuery = {
       sectionDate: string | null;
       position: number | null;
       sidebarPosition: number | null;
+      createdAt: string;
     }[];
   } | null;
 };
@@ -149,12 +152,22 @@ function parseView(value: string | string[] | undefined): ItineraryView {
   return "activities";
 }
 
+function parseStop(value: string | string[] | undefined, stops: { id: string }[]) {
+  const stop = Array.isArray(value) ? value[0] : value;
+
+  if (!stop || !stops.some((item) => item.id === stop)) {
+    return null;
+  }
+
+  return stop;
+}
+
 export default async function ItineraryPage({
   params,
   searchParams,
 }: PageProps<"/itineraries/[id]">) {
   const { id } = await params;
-  const { view: viewParam } = await searchParams;
+  const { view: viewParam, stop: stopParam } = await searchParams;
   const view = parseView(viewParam);
   const { itinerary } = await executeGraphQL<ItineraryQuery>(itineraryQuery, {
     id,
@@ -175,6 +188,31 @@ export default async function ItineraryPage({
     id: stop.id,
     name: stop.name,
   }));
+  const stopId = parseStop(stopParam, stops);
+  const categoryColors = new Map(categories.map((category) => [category.id, category.color]));
+  const mapPlaces = placesForStop(
+    itinerary.googlePlaces.map((place) => ({
+      id: place.id,
+      googlePlaceId: place.googlePlaceId,
+      name: place.name,
+      address: place.address,
+      latitude: Number(place.latitude),
+      longitude: Number(place.longitude),
+      activities: itinerary.activities
+        .filter((activity) => activity.googlePlaceId === place.googlePlaceId)
+        .map((activity) => ({
+          id: activity.id,
+          name: activity.name,
+          stopId: activity.stopId,
+          onTimeline: Boolean(
+            (activity.startDate && activity.startTime && activity.endTime) || activity.sectionId,
+          ),
+          createdAt: activity.createdAt,
+          color: categoryColors.get(activity.categoryId ?? "") ?? "#E0E6ED",
+        })),
+    })),
+    stopId,
+  );
   const sidebarItems = itinerary.activities
     .filter((activity) => activity.inSidebar)
     .map((activity) => ({
@@ -233,35 +271,10 @@ export default async function ItineraryPage({
         <section className={`${styles.side} ${styles.mapPanel}`} aria-label="Map">
           <ItineraryMap
             apiKey={process.env.GOOGLE_PLACES_API_KEY ?? ""}
-            places={itinerary.googlePlaces.map((place) => {
-              const activities = itinerary.activities
-                .filter((activity) => activity.googlePlaceId === place.googlePlaceId)
-                .map((activity) => ({
-                  id: activity.id,
-                  name: activity.name,
-                  onTimeline: Boolean(
-                    (activity.startDate && activity.startTime && activity.endTime) ||
-                      activity.sectionId,
-                  ),
-                }))
-                .sort(
-                  (left, right) =>
-                    Number(left.onTimeline) - Number(right.onTimeline) ||
-                    left.name.localeCompare(right.name),
-                );
-
-              return {
-                id: place.id,
-                googlePlaceId: place.googlePlaceId,
-                name: place.name,
-                address: place.address,
-                latitude: Number(place.latitude),
-                longitude: Number(place.longitude),
-                color: place.color,
-                activityIds: activities.map((activity) => activity.id),
-                activities,
-              };
-            })}
+            itineraryId={itinerary.id}
+            stops={stops}
+            stopId={stopId}
+            places={mapPlaces}
           />
         </section>
       )}

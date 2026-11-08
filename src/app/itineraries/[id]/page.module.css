@@ -126,7 +126,50 @@
 
 .mapPanel {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
+}
+
+.mapStops {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px;
+  border-bottom: 1px solid var(--surface);
+  background-color: var(--foreground);
+}
+
+.mapStops button {
+  flex-shrink: 0;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.mapStops button:hover,
+.mapStops button:focus-visible {
+  color: var(--primary);
+  border-color: transparent;
+}
+
+.mapStops button[aria-pressed="true"],
+.mapStops button[aria-pressed="true"]:hover,
+.mapStops button[aria-pressed="true"]:focus-visible {
+  color: #ffffff;
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.mapStage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .mapCanvas {
