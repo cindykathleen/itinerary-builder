@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { autocompletePlaces, getGooglePlace, GooglePlacesError } from "./google-places";
 
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ referer: "http://localhost:3000/itineraries" }),
+}));
+
 describe("Google place fixtures", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -38,5 +42,19 @@ describe("Google place fixtures", () => {
     vi.stubEnv("GOOGLE_PLACES_FIXTURES", "1");
 
     await expect(getGooglePlace("missing-place", null)).rejects.toBeInstanceOf(GooglePlacesError);
+  });
+
+  it("sends the page referer so a referrer-restricted key can authorize the search", async () => {
+    vi.stubEnv("GOOGLE_PLACES_API_KEY", "test-key");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ suggestions: [] }), { status: 200 }),
+    );
+
+    await autocompletePlaces("pizza", null);
+
+    const [, init] = fetchSpy.mock.calls[0];
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Referer")).toBe("http://localhost:3000/itineraries");
+    expect(headers.get("X-Goog-Api-Key")).toBe("test-key");
   });
 });

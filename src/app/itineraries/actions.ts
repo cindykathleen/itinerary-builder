@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { COVER_MAX_BYTES, coverContentType, coverExtension } from "@/lib/cover-url";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import { deleteCoverObject, uploadCoverObject } from "@/lib/r2";
 
 const updateItineraryStatusMutation = /* GraphQL */ `
   mutation UpdateItineraryStatus($id: ID!, $status: ItineraryStatus!) {
@@ -84,26 +86,32 @@ const createItineraryMutation = /* GraphQL */ `
 const saveItineraryScheduleMutation = /* GraphQL */ `
   mutation SaveItinerarySchedule(
     $id: ID!
-    $dayStart: String!
-    $dayEnd: String!
-    $timeInterval: Int!
+    $planningMode: PlanningMode!
+    $dayStart: String
+    $dayEnd: String
+    $timeInterval: Int
     $places: [String!]!
+    $sections: [String!]
   ) {
     saveItinerarySchedule(
       id: $id
+      planningMode: $planningMode
       dayStart: $dayStart
       dayEnd: $dayEnd
       timeInterval: $timeInterval
       places: $places
+      sections: $sections
     ) {
       id
       scheduleConfigured
+      planningMode
     }
   }
 `;
 
 export async function saveItinerarySchedule(formData: FormData) {
   const id = String(formData.get("id") ?? "");
+  const planningMode = formData.get("planningMode") === "sections" ? "sections" : "timeline";
   const dayStart = String(formData.get("dayStart") ?? "");
   const dayEnd = String(formData.get("dayEnd") ?? "");
   const timeInterval = Number(formData.get("timeInterval"));
@@ -111,13 +119,16 @@ export async function saveItinerarySchedule(formData: FormData) {
     ...formData.getAll("places").map((value) => String(value)),
     String(formData.get("placeDraft") ?? ""),
   ];
+  const sections = formData.getAll("sections").map((value) => String(value));
 
   await executeGraphQL(saveItineraryScheduleMutation, {
     id,
-    dayStart,
-    dayEnd,
-    timeInterval,
+    planningMode,
+    dayStart: planningMode === "timeline" ? dayStart : null,
+    dayEnd: planningMode === "timeline" ? dayEnd : null,
+    timeInterval: planningMode === "timeline" ? timeInterval : null,
     places,
+    sections: planningMode === "sections" ? sections : [],
   });
   revalidatePath(`/itineraries/${id}`);
 }
@@ -147,9 +158,10 @@ const updateItineraryMutation = /* GraphQL */ `
     $name: String!
     $dateStart: String!
     $dateEnd: String!
-    $dayStart: String!
-    $dayEnd: String!
-    $timeInterval: Int!
+    $dayStart: String
+    $dayEnd: String
+    $timeInterval: Int
+    $sections: [ItinerarySectionInput!]
   ) {
     updateItinerary(
       id: $id
@@ -159,6 +171,7 @@ const updateItineraryMutation = /* GraphQL */ `
       dayStart: $dayStart
       dayEnd: $dayEnd
       timeInterval: $timeInterval
+      sections: $sections
     ) {
       id
       name
@@ -171,21 +184,102 @@ export async function updateItinerary(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const dateStart = String(formData.get("dateStart") ?? "");
   const dateEnd = String(formData.get("dateEnd") ?? "");
+  const planningMode = formData.get("planningMode") === "sections" ? "sections" : "timeline";
   const dayStart = String(formData.get("dayStart") ?? "");
   const dayEnd = String(formData.get("dayEnd") ?? "");
   const timeInterval = Number(formData.get("timeInterval"));
+  const sectionNames = formData.getAll("sections").map((value) => String(value));
+  const sectionIds = formData.getAll("sectionIds").map((value) => String(value));
 
   await executeGraphQL(updateItineraryMutation, {
     id,
     name,
     dateStart,
     dateEnd,
-    dayStart,
-    dayEnd,
-    timeInterval,
+    dayStart: planningMode === "timeline" ? dayStart : null,
+    dayEnd: planningMode === "timeline" ? dayEnd : null,
+    timeInterval: planningMode === "timeline" ? timeInterval : null,
+    sections:
+      planningMode === "sections"
+        ? sectionNames.map((sectionName, index) => ({
+            id: sectionIds[index] || null,
+            name: sectionName,
+          }))
+        : null,
   });
   revalidatePath("/itineraries");
   revalidatePath(`/itineraries/${id}`);
+}
+
+const setItineraryCoverMutation = /* GraphQL */ `
+  mutation SetItineraryCover($id: ID!, $photoUrl: String) {
+    setItineraryCover(id: $id, photoUrl: $photoUrl) {
+      id
+      photoUrl
+    }
+  }
+`;
+
+function revalidateCover(id: string) {
+  revalidatePath("/itineraries");
+  revalidatePath(`/itineraries/${id}`);
+}
+
+function coverUploadMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+  if (/bad record mac|EPROTO|ECONNRESET|ETIMEDOUT|socket hang up/i.test(detail)) {
+    return "The cover could not be uploaded. Please try again.";
+  }
+  return detail && detail !== "The cover could not be uploaded."
+    ? detail
+    : "The cover could not be uploaded.";
+}
+
+export async function uploadItineraryCover(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const file = formData.get("file");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a JPEG, PNG, or WebP image." };
+  }
+
+  if (file.size > COVER_MAX_BYTES) {
+    return { error: "Cover images must be 5 MB or smaller." };
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const contentType = coverContentType(bytes, file.type);
+
+  if (!contentType) {
+    return { error: "Cover images must be JPEG, PNG, or WebP." };
+  }
+
+  let photoUrl: string;
+
+  try {
+    photoUrl = await uploadCoverObject(bytes, contentType, coverExtension(contentType));
+  } catch (error) {
+    console.error("Cover upload failed.", error);
+    return { error: coverUploadMessage(error) };
+  }
+
+  try {
+    await executeGraphQL(setItineraryCoverMutation, { id, photoUrl });
+  } catch (error) {
+    await deleteCoverObject(photoUrl).catch(() => {});
+    return {
+      error: error instanceof Error ? error.message : "The cover could not be saved.",
+    };
+  }
+
+  revalidateCover(id);
+}
+
+export async function removeItineraryCover(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+
+  await executeGraphQL(setItineraryCoverMutation, { id, photoUrl: null });
+  revalidateCover(id);
 }
 
 const createCategoryMutation = /* GraphQL */ `
@@ -294,6 +388,21 @@ export async function deleteStop(formData: FormData) {
   revalidatePath(`/itineraries/${itineraryId}`);
 }
 
+const reorderSidebarActivityMutation = /* GraphQL */ `
+  mutation ReorderSidebarActivity($id: ID!, $itineraryId: ID!, $beforeId: ID) {
+    reorderSidebarActivity(id: $id, itineraryId: $itineraryId, beforeId: $beforeId)
+  }
+`;
+
+export async function reorderSidebarActivity(input: {
+  itineraryId: string;
+  id: string;
+  beforeId: string | null;
+}) {
+  await executeGraphQL(reorderSidebarActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
+
 export async function deleteCategory(formData: FormData) {
   const itineraryId = String(formData.get("itineraryId") ?? "");
   const id = String(formData.get("id") ?? "");
@@ -315,6 +424,7 @@ const createActivityMutation = /* GraphQL */ `
     $date: String
     $startTime: String
     $endTime: String
+    $sectionId: ID
   ) {
     createActivity(
       itineraryId: $itineraryId
@@ -328,6 +438,7 @@ const createActivityMutation = /* GraphQL */ `
       date: $date
       startTime: $startTime
       endTime: $endTime
+      sectionId: $sectionId
     ) {
       id
       name
@@ -349,6 +460,7 @@ export async function createActivity(formData: FormData) {
   const date = String(formData.get("date") ?? "").trim();
   const startTime = String(formData.get("startTime") ?? "").trim();
   const endTime = String(formData.get("endTime") ?? "").trim();
+  const sectionId = String(formData.get("sectionId") ?? "").trim();
   const inSidebar = formData.get("inSidebar") !== "false";
 
   await executeGraphQL(createActivityMutation, {
@@ -363,6 +475,7 @@ export async function createActivity(formData: FormData) {
     date: date || null,
     startTime: startTime || null,
     endTime: endTime || null,
+    sectionId: sectionId || null,
   });
   revalidatePath(`/itineraries/${itineraryId}`);
 }
@@ -466,6 +579,35 @@ const unscheduleActivityMutation = /* GraphQL */ `
 
 export async function unscheduleActivity(input: { itineraryId: string; id: string }) {
   await executeGraphQL(unscheduleActivityMutation, input);
+  revalidatePath(`/itineraries/${input.itineraryId}`);
+}
+
+const placeActivityInSectionMutation = /* GraphQL */ `
+  mutation PlaceActivityInSection(
+    $id: ID!
+    $itineraryId: ID!
+    $date: String!
+    $sectionId: ID!
+    $position: Int!
+  ) {
+    placeActivityInSection(
+      id: $id
+      itineraryId: $itineraryId
+      date: $date
+      sectionId: $sectionId
+      position: $position
+    )
+  }
+`;
+
+export async function placeActivityInSection(input: {
+  itineraryId: string;
+  id: string;
+  date: string;
+  sectionId: string;
+  position: number;
+}) {
+  await executeGraphQL(placeActivityInSectionMutation, input);
   revalidatePath(`/itineraries/${input.itineraryId}`);
 }
 

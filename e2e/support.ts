@@ -14,6 +14,30 @@ export async function signUp(page: Page, email: string) {
   await expect(page.getByRole("heading", { name: "My Itineraries" })).toBeVisible();
 }
 
+export async function createItinerary(page: Page, name: string) {
+  await page.getByRole("button", { name: "+ New" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New itinerary" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByLabel("Start date").fill("2026-11-02");
+  await dialog.getByLabel("End date").fill("2026-11-03");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+}
+
+export async function createSectionsItinerary(page: Page, name: string) {
+  await createItinerary(page, name);
+  await page.getByRole("link", { name, exact: true }).click();
+
+  const schedule = page.getByRole("dialog", { name: "Settings" });
+  await expect(schedule).toBeVisible();
+  await schedule.getByLabel("Places").fill("Taipei,Kyoto,");
+  await schedule.getByRole("radio", { name: "Sections" }).check();
+  await schedule.getByRole("textbox", { name: "Section 1", exact: true }).fill("Morning");
+  await schedule.getByRole("button", { name: "Save" }).click();
+  await expect(schedule).toBeHidden();
+  await expect(page.getByRole("region", { name: "Sections" })).toBeVisible();
+}
+
 export async function createScheduledItinerary(page: Page, name: string) {
   await page.getByRole("button", { name: "+ New" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New itinerary" });

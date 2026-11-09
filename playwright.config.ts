@@ -35,6 +35,8 @@ export default defineConfig({
       BETTER_AUTH_SECRET: localEnv.BETTER_AUTH_SECRET ?? "",
       GOOGLE_PLACES_API_KEY: "test-key",
       GOOGLE_PLACES_FIXTURES: "1",
+      R2_FIXTURES: "1",
+      NEXT_PUBLIC_R2_PUBLIC_URL: "https://covers.example.test",
     },
   },
 });

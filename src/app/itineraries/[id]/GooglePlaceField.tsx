@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import dialogStyles from "../dialog.module.css";
 
 const SEARCH_DELAY_MS = 800;
@@ -19,6 +19,8 @@ export default function GooglePlaceField({
   const inputId = useId();
   const listId = useId();
   const descriptionId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const placeRef = useRef(place);
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -28,6 +30,54 @@ export default function GooglePlaceField({
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    placeRef.current = place;
+  }, [place]);
+
+  const clearSearch = () => {
+    setQuery("");
+    setSuggestions([]);
+    setOpen(false);
+    setActiveIndex(0);
+    setLoading(false);
+    setError("");
+  };
+
+  useEffect(() => {
+    const dialog = rootRef.current?.closest("dialog");
+
+    if (!dialog) {
+      return;
+    }
+
+    const resetOnClose = () => {
+      clearSearch();
+      setSelected(placeRef.current);
+      setFromSearch(false);
+      setSessionToken(crypto.randomUUID());
+    };
+
+    dialog.addEventListener("close", resetOnClose);
+    return () => dialog.removeEventListener("close", resetOnClose);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const dismissOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
+        return;
+      }
+
+      clearSearch();
+    };
+
+    document.addEventListener("pointerdown", dismissOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", dismissOnOutsidePointer);
+  }, [open]);
 
   useEffect(() => {
     if (selected || query.trim().length < 2) {
@@ -124,7 +174,7 @@ export default function GooglePlaceField({
   };
 
   return (
-    <div className={dialogStyles.field}>
+    <div ref={rootRef} className={dialogStyles.field}>
       <label htmlFor={inputId}>Google Maps</label>
       <p id={descriptionId} className={dialogStyles.note}>
         Link the activity to Google Maps.
@@ -198,7 +248,7 @@ export default function GooglePlaceField({
               if (event.key === "Escape" && open) {
                 event.preventDefault();
                 event.stopPropagation();
-                setOpen(false);
+                clearSearch();
               }
             }}
           />

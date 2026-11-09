@@ -3,9 +3,12 @@
 import { useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
+import { sectionNames } from "@/lib/sections";
 import { updateItinerary } from "../actions";
+import CoverControls from "../CoverControls";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
+import SectionListEditor from "../SectionListEditor";
 import styles from "./page.module.css";
 
 function isEndDateBeforeStart(start: string, end: string) {
@@ -14,6 +17,41 @@ function isEndDateBeforeStart(start: string, end: string) {
 
 function isEndTimeBeforeStart(start: string, end: string) {
   return Boolean(start && end && end <= start);
+}
+
+type PlanningMode = "timeline" | "sections";
+
+type SectionDraft = {
+  key: string;
+  id: string | null;
+  name: string;
+};
+
+function sectionDrafts(
+  sections: { id: string; name: string; position: number }[],
+): SectionDraft[] {
+  return [...(sections ?? [])]
+    .sort((left, right) => left.position - right.position)
+    .map((section) => ({ key: section.id, id: section.id, name: section.name }));
+}
+
+function sectionListError(values: string[]) {
+  try {
+    sectionNames(values);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "A section is required.";
+    return message === "A section is required." ? null : message;
+  }
+}
+
+function sectionsAreValid(values: string[]) {
+  try {
+    sectionNames(values);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function SaveButton({ disabled }: { disabled: boolean }) {
@@ -37,6 +75,13 @@ export default function ItineraryEdit({
     dayStart: string;
     dayEnd: string;
     timeInterval: number;
+    planningMode: PlanningMode;
+    photoUrl: string | null;
+    sections: {
+      id: string;
+      name: string;
+      position: number;
+    }[];
   };
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -48,16 +93,21 @@ export default function ItineraryEdit({
   const [dayStart, setDayStart] = useState(itinerary.dayStart);
   const [dayEnd, setDayEnd] = useState(itinerary.dayEnd);
   const [timeInterval, setTimeInterval] = useState(String(itinerary.timeInterval));
+  const [sections, setSections] = useState(() => sectionDrafts(itinerary.sections));
+  const [nextSectionKey, setNextSectionKey] = useState(1);
+  const sectionsMode = itinerary.planningMode === "sections";
   const dateRangeError = isEndDateBeforeStart(dateStart, dateEnd);
   const timeRangeError = isEndTimeBeforeStart(dayStart, dayEnd);
+  const sectionError = sectionListError(sections.map((section) => section.name));
   const fieldsFilled =
     name.trim() !== "" &&
     dateStart !== "" &&
     dateEnd !== "" &&
-    dayStart !== "" &&
-    dayEnd !== "" &&
-    timeInterval !== "";
-  const canSubmit = fieldsFilled && !dateRangeError && !timeRangeError;
+    (sectionsMode || (dayStart !== "" && dayEnd !== "" && timeInterval !== ""));
+  const canSubmit =
+    fieldsFilled &&
+    !dateRangeError &&
+    (sectionsMode ? sectionsAreValid(sections.map((section) => section.name)) : !timeRangeError);
 
   const openDialog = () => {
     setName(itinerary.name);
@@ -66,6 +116,7 @@ export default function ItineraryEdit({
     setDayStart(itinerary.dayStart);
     setDayEnd(itinerary.dayEnd);
     setTimeInterval(String(itinerary.timeInterval));
+    setSections(sectionDrafts(itinerary.sections));
     endDateRef.current?.setCustomValidity("");
     endTimeRef.current?.setCustomValidity("");
     dialogRef.current?.showModal();
@@ -89,9 +140,11 @@ export default function ItineraryEdit({
     endDateRef.current?.setCustomValidity(
       dateRangeError ? "End date cannot be earlier than the start date." : "",
     );
-    endTimeRef.current?.setCustomValidity(
-      timeRangeError ? "Day end must be later than the day start." : "",
-    );
+    if (!sectionsMode) {
+      endTimeRef.current?.setCustomValidity(
+        timeRangeError ? "Day end must be later than the day start." : "",
+      );
+    }
 
     if (dateRangeError) {
       event.preventDefault();
@@ -99,7 +152,7 @@ export default function ItineraryEdit({
       return;
     }
 
-    if (timeRangeError) {
+    if (!sectionsMode && timeRangeError) {
       event.preventDefault();
       endTimeRef.current?.reportValidity();
     }
@@ -119,6 +172,7 @@ export default function ItineraryEdit({
       >
         <form className={dialogStyles.form} action={save} onSubmit={guardSubmit}>
           <input type="hidden" name="id" value={itinerary.id} />
+          <input type="hidden" name="planningMode" value={itinerary.planningMode} />
 
           <div className={dialogStyles.header}>
             <h2 id="edit-itinerary-title" className={dialogStyles.title}>
@@ -135,6 +189,15 @@ export default function ItineraryEdit({
           </div>
 
           <div className={dialogStyles.body}>
+            <div className={dialogStyles.field}>
+              <span>Cover</span>
+              {itinerary.photoUrl ? (
+                <img className={styles.coverPreview} src={itinerary.photoUrl} alt="" />
+              ) : null}
+              <p className={dialogStyles.note}>JPEG, PNG, or WebP. 5 MB maximum.</p>
+              <CoverControls itineraryId={itinerary.id} photoUrl={itinerary.photoUrl} />
+            </div>
+
             <div className={dialogStyles.field}>
               <label htmlFor="edit-name">
                 Name <span className="required">*</span>
@@ -189,6 +252,36 @@ export default function ItineraryEdit({
               </div>
             </fieldset>
 
+            {sectionsMode ? (
+              <div className={dialogStyles.field}>
+                <span id="edit-sections-label">
+                  Sections <span className="required">*</span>
+                </span>
+                <p id="edit-sections-help" className={dialogStyles.note}>
+                  Planning style cannot be changed. Use names like Morning, Afternoon, and Night
+                  when the plan should stay loose.
+                </p>
+                <SectionListEditor
+                  sections={sections}
+                  labelledBy="edit-sections-label"
+                  describedBy="edit-sections-help"
+                  withIds
+                  canAdd={sections.length < 12}
+                  onChange={setSections}
+                  onAdd={() => {
+                    const key = `section-${nextSectionKey}`;
+                    setNextSectionKey((current) => current + 1);
+                    setSections((current) => [...current, { key, id: null, name: "" }]);
+                  }}
+                />
+                {sectionError ? (
+                  <p className={dialogStyles.hint} role="alert">
+                    {sectionError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+            <>
             <fieldset className={dialogStyles.fieldset}>
               <div className={dialogStyles.field}>
                 <label htmlFor="edit-day-start">
@@ -254,6 +347,8 @@ export default function ItineraryEdit({
                 </label>
               </div>
             </fieldset>
+            </>
+            )}
           </div>
 
           <div className={dialogStyles.actions}>

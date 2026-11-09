@@ -9,6 +9,7 @@ import {
   overlapBox,
   placementCellKeys,
   scheduledRange,
+  validScheduleRange,
   type TimelineActivityTime,
 } from "./timeline";
 
@@ -77,6 +78,16 @@ describe("clockTime", () => {
 
   it("folds later days into the end time hours", () => {
     expect(clockTime("2026-10-29", "2026-10-30", "02:00")).toBe("26:00");
+  });
+});
+
+describe("validScheduleRange", () => {
+  it("accepts an end clock earlier than the start when the activity continues to the next day", () => {
+    expect(validScheduleRange("08:00", "20:00", 30, "15:00", "11:00", 1)).toBe(true);
+  });
+
+  it("rejects an end clock earlier than the start on the same day", () => {
+    expect(validScheduleRange("08:00", "20:00", 30, "15:00", "11:00")).toBe(false);
   });
 });
 

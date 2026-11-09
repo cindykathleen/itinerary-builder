@@ -22,6 +22,7 @@ type SidebarActivity = {
   googlePlaceName: string | null;
   googlePlaceAddress: string | null;
   startDate: string | null;
+  sidebarPosition: number | null;
 };
 
 function SubmitButton({ label, disabled }: { label: string; disabled?: boolean }) {
@@ -34,14 +35,26 @@ function SubmitButton({ label, disabled }: { label: string; disabled?: boolean }
   );
 }
 
+function onItinerary(activity: SidebarActivity) {
+  return activity.stopId !== null && activity.startDate !== null;
+}
+
 function listedActivities(activities: SidebarActivity[]) {
   return [...activities]
-    .sort((left, right) => Number(left.startDate !== null) - Number(right.startDate !== null))
+    .sort((left, right) => {
+      const group = Number(onItinerary(left)) - Number(onItinerary(right));
+
+      if (group !== 0) {
+        return group;
+      }
+
+      return (left.sidebarPosition ?? 0) - (right.sidebarPosition ?? 0);
+    })
     .map((activity) => ({
       id: activity.id,
       name: activity.name,
       note: activity.note,
-      scheduled: activity.startDate !== null,
+      scheduled: onItinerary(activity),
       stopId: activity.stopId,
       googlePlaceId: activity.googlePlaceId,
       googlePlaceName: activity.googlePlaceName,
