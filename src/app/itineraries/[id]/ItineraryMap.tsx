@@ -26,6 +26,83 @@ export type MapPlace = {
 
 const TEXT_PRIMARY = "#1A202C";
 const WHITE = "#FFFFFF";
+const PLACE_CARD_TAG = "gmp-internal-use-2d-map-place-details-compact";
+
+const placeCardStyles: Record<string, string> = {
+  [PLACE_CARD_TAG]: `
+    :host {
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .outer-container,
+    :host([orientation="horizontal" i]) .outer-container,
+    .container.place-compact,
+    .container.place-compact.horizontal:not(.error, .empty) {
+      padding: 0 !important;
+    }
+
+    .name-and-address {
+      gap: 0 !important;
+    }
+  `,
+  "gmp-place-name": `
+    span {
+      color: var(--text-primary) !important;
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 18px !important;
+      font-weight: 400 !important;
+      font-style: normal !important;
+      line-height: 24px !important;
+      letter-spacing: normal !important;
+    }
+  `,
+  "gmp-place-address": `
+    span {
+      color: var(--text-primary) !important;
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 16px !important;
+      font-weight: 400 !important;
+      font-style: normal !important;
+      line-height: 24px !important;
+      letter-spacing: normal !important;
+    }
+  `,
+};
+
+function installPlaceCardStyles() {
+  const elementPrototype = Element.prototype as typeof Element.prototype & {
+    __itineraryPlaceCardPatch?: boolean;
+  };
+
+  if (elementPrototype.__itineraryPlaceCardPatch) {
+    return;
+  }
+
+  elementPrototype.__itineraryPlaceCardPatch = true;
+  const attachShadow = elementPrototype.attachShadow;
+
+  elementPrototype.attachShadow = function (init: ShadowRootInit) {
+    const root = attachShadow.call(this, init);
+    const css = placeCardStyles[this.localName];
+
+    if (css) {
+      const style = document.createElement("style");
+      style.dataset.placeCard = this.localName;
+      style.textContent = css;
+      root.append(style);
+    }
+
+    return root;
+  };
+}
+
+if (typeof window !== "undefined") {
+  installPlaceCardStyles();
+}
 
 function pinGlyphColor(color: string) {
   const digits = color.slice(1);
@@ -147,49 +224,98 @@ function paintPin(pin: GooglePin, marker: GoogleMarker, place: MapPlace) {
   marker.title = pinTitle(place);
 }
 
+function googleMapsHref(placeId: string, name: string | null) {
+  const params = new URLSearchParams({
+    api: "1",
+    query: name?.trim() || "Google Maps",
+    query_place_id: placeId,
+  });
+
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
+function externalLinkIcon() {
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute(
+    "d",
+    "M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7ZM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7Z",
+  );
+  icon.append(path);
+  return icon;
+}
+
 function markerContent(place: MapPlace, onAdd: (activityId: string) => void) {
+  const header = document.createElement("div");
   const name = document.createElement("h4");
+  const actions = document.createElement("div");
+  const link = document.createElement("a");
   const body = document.createElement("div");
   const address = document.createElement("p");
+  header.className = styles.mapPopupHeader;
+  actions.className = styles.mapPopupActions;
   name.className = styles.mapPopupTitle;
-  address.className = styles.mapPopupAddress;
   name.textContent = place.name;
+  link.className = styles.mapPopupExternal;
+  link.href = googleMapsHref(place.googlePlaceId, place.name);
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.setAttribute("aria-label", "Google Map");
+  link.append(externalLinkIcon());
+  link.addEventListener("pointerdown", (event) => event.stopPropagation());
+  link.addEventListener("mousedown", (event) => event.stopPropagation());
+  actions.append(link);
+  header.append(name, actions);
+  address.className = styles.mapPopupAddress;
   address.textContent = place.address;
   body.append(address);
 
-  if (place.activities.length > 0) {
+  const unscheduled = place.activities.filter((activity) => !activity.onTimeline);
+
+  if (unscheduled.length > 0) {
     const list = document.createElement("ul");
     list.className = styles.mapPopupActivities;
 
-    for (const activity of place.activities) {
+    for (const activity of unscheduled) {
       const item = document.createElement("li");
-
-      if (activity.onTimeline) {
-        item.className = `${styles.mapPopupActivity} ${styles.mapPopupActivityScheduled}`;
-        item.textContent = activity.name;
-      } else {
-        const add = document.createElement("button");
-        add.type = "button";
-        add.className = `primary ${styles.mapPopupAdd}`;
-        add.textContent = "Add to itinerary";
-        add.setAttribute("aria-label", `Add ${activity.name} to itinerary`);
-        add.addEventListener("pointerdown", (event) => event.stopPropagation());
-        add.addEventListener("mousedown", (event) => event.stopPropagation());
-        add.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onAdd(activity.id);
-        });
-        item.append(add);
-      }
-
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = `primary ${styles.mapPopupAdd}`;
+      add.textContent = "Add to itinerary";
+      add.setAttribute("aria-label", `Add ${activity.name} to itinerary`);
+      add.addEventListener("pointerdown", (event) => event.stopPropagation());
+      add.addEventListener("mousedown", (event) => event.stopPropagation());
+      add.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onAdd(activity.id);
+      });
+      item.append(add);
       list.append(item);
     }
 
     body.append(list);
   }
 
-  return { name, body };
+  return { header, body };
+}
+
+function attachCloseButton(header: HTMLElement) {
+  const actions = header.querySelector(`.${styles.mapPopupActions}`);
+  const row = header.closest(".gm-style-iw-chr");
+  const closeButton = row?.querySelector(".gm-ui-hover-effect");
+  const target = actions ?? header;
+
+  if (closeButton && closeButton.parentElement !== target) {
+    target.append(closeButton);
+    return true;
+  }
+
+  return closeButton?.parentElement === target;
 }
 
 function MapStopSwitcher({
@@ -343,9 +469,17 @@ export default function ItineraryMap({
               window.dispatchEvent(new CustomEvent("activity-add-to-itinerary", { detail: activityId }));
               infoWindow.close();
             });
-            infoWindow.setHeaderContent(content.name);
+            infoWindow.setHeaderContent(content.header);
             infoWindow.setContent(content.body);
             infoWindow.open({ map, anchor: marker });
+
+            if (!attachCloseButton(content.header)) {
+              requestAnimationFrame(() => {
+                if (!attachCloseButton(content.header)) {
+                  requestAnimationFrame(() => attachCloseButton(content.header));
+                }
+              });
+            }
           });
           markers.push(marker);
           markersRef.current.set(place.googlePlaceId, {

@@ -204,24 +204,45 @@
 }
 
 .mapCanvas :global(.gm-style-iw-c) {
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  width: 400px !important;
+  min-width: 400px !important;
+  max-width: 400px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
   padding: 16px !important;
 }
 
 .mapCanvas :global(.gm-style-iw-chr) {
-  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
   width: 100%;
   margin-bottom: 8px;
 }
 
 .mapCanvas :global(.gm-style-iw-d) {
-  padding: 0;
-  overflow: hidden !important;
+  flex: 0 0 auto;
+  height: auto !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 .mapCanvas :global(.gm-ui-hover-effect) {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  flex: 0 0 auto;
+  align-self: flex-start;
   width: 24px !important;
   height: 24px !important;
-  margin-left: auto !important;
+  margin: 0 0 0 16px !important;
 }
 
 .mapCanvas :global(.gm-ui-hover-effect) span {
@@ -232,10 +253,23 @@
 
 .mapCanvas :global(.gm-style-iw-ch) {
   display: flex;
-  flex: 1;
-  align-items: center;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  min-width: 0;
   padding: 0;
   text-transform: none;
+}
+
+.mapCanvas :global(gmp-internal-use-2d-map-place-details-compact) {
+  box-sizing: border-box;
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .mapPopupTitle,
@@ -247,9 +281,64 @@
   text-transform: none;
 }
 
+.mapPopupHeader {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.mapPopupActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  margin-left: auto;
+}
+
+.mapPopupHeader :global(.gm-ui-hover-effect) {
+  margin: 0 !important;
+}
+
 .mapPopupTitle {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 18px;
   line-height: 24px;
+}
+
+.mapPopupExternal,
+.mapPopupExternal:hover,
+.mapPopupExternal:focus-visible {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #000000;
+  line-height: 0;
+  text-decoration: none;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.mapPopupExternal:hover,
+.mapPopupExternal:focus-visible {
+  opacity: 1;
+}
+
+.mapPopupExternal svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .mapPopupAddress {
@@ -264,18 +353,6 @@
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
-}
-
-.mapPopupActivity {
-  color: var(--text-primary);
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 24px;
-}
-
-.mapPopupActivityScheduled {
-  opacity: 0.4;
 }
 
 .mapPopupAdd {
@@ -981,6 +1058,12 @@
 
   .mapPanel {
     height: 480px;
+  }
+
+  .mapCanvas :global(.gm-style-iw-c) {
+    width: 320px !important;
+    min-width: 320px !important;
+    max-width: 320px !important;
   }
 
   .placeSelect {

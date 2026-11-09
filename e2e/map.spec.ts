@@ -60,7 +60,17 @@ test("links fixture places on the map without calling Google", async ({ page }) 
   await expect(map.getByTitle(`${park.name}, on the timeline`)).toBeVisible();
   await expect(map.getByTitle(`${hotel.name}, not on the timeline`)).toBeVisible();
 
+  await map.getByTitle(`${park.name}, on the timeline`).click();
+  const parkLink = map.getByRole("link", { name: "Google Map" });
+  await expect(map.getByRole("heading", { name: park.name })).toBeVisible();
+  await expect(map.getByText("Morning walk")).toHaveCount(0);
+  await expect(parkLink).toBeVisible();
+  await expect(parkLink).toHaveAttribute("href", /query_place_id=fixture-park/);
+
   await map.getByTitle(`${hotel.name}, not on the timeline`).click();
+  const hotelLink = map.getByRole("link", { name: "Google Map" });
+  await expect(hotelLink).toBeVisible();
+  await expect(hotelLink).toHaveAttribute("href", /query_place_id=fixture-hotel/);
   await map.getByRole("button", { name: "Add Garden stroll to itinerary" }).click();
   await expect(timeline.locator('[aria-label="Garden stroll"]')).toBeVisible();
   await expect(map.getByTitle(`${hotel.name}, on the timeline`)).toBeVisible();
