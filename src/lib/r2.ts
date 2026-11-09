@@ -5,6 +5,10 @@ import { coverObjectKey, type CoverContentType } from "./cover-url";
 const TRANSIENT_UPLOAD_ERROR =
   /bad record mac|EPROTO|ECONNRESET|ETIMEDOUT|EPIPE|socket hang up|TimeoutError/i;
 
+function coverFixturesEnabled() {
+  return process.env.R2_FIXTURES === "1";
+}
+
 function r2Client() {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -38,11 +42,16 @@ export async function uploadCoverObject(body: Buffer, contentType: CoverContentT
   const bucket = process.env.R2_BUCKET_NAME;
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.trim().replace(/\/$/, "");
 
-  if (!bucket || !base) {
+  if (!base || (!coverFixturesEnabled() && !bucket)) {
     throw new Error("Cloudflare R2 is not configured.");
   }
 
   const key = `${crypto.randomUUID()}.${extension}`;
+
+  if (coverFixturesEnabled()) {
+    return `${base}/${key}`;
+  }
+
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -72,6 +81,10 @@ export async function uploadCoverObject(body: Buffer, contentType: CoverContentT
 
 export async function deleteCoverObject(photoUrl: string | null | undefined) {
   if (!photoUrl) {
+    return;
+  }
+
+  if (coverFixturesEnabled()) {
     return;
   }
 

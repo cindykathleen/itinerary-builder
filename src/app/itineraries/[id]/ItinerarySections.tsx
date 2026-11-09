@@ -297,6 +297,8 @@ export default function ItinerarySections({
                 <div
                   key={`${section.id}-${day.iso}`}
                   className={[styles.cell, cellTarget ? styles.cellOver : ""].filter(Boolean).join(" ")}
+                  data-date={day.iso}
+                  data-section={section.name}
                   style={{ gridColumn: column + 2, gridRow: row + 2 }}
                   onClick={() =>
                     setPendingCreate({

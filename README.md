@@ -59,7 +59,7 @@ R2_BUCKET_NAME=itinerary-builder-images
 NEXT_PUBLIC_R2_PUBLIC_URL=https://your-bucket.r2.dev
 ```
 
-`GOOGLE_PLACES_FIXTURES=1` stubs Google Places. End-to-end tests set it; leave it unset for a real key.
+`GOOGLE_PLACES_FIXTURES=1` stubs Google Places. `R2_FIXTURES=1` stores cover URLs without calling Cloudflare. End-to-end tests set both; leave them unset for a real Places key and a real R2 bucket.
 
 Cover images upload to the Cloudflare R2 bucket named by `R2_BUCKET_NAME`. Create an R2 API token that can read and write objects in that bucket, then set `R2_ACCESS_KEY_ID` and `R2_ACCESS_KEY_SECRET`. `NEXT_PUBLIC_R2_PUBLIC_URL` is the bucket's public development URL, without a trailing slash.
 

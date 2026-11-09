@@ -56,7 +56,7 @@ export async function installMapStub(page: Page) {
         popup.dataset.mapPopup = "true";
         popup.style.position = "absolute";
         popup.style.zIndex = "5";
-        popup.style.inset = "16px 16px auto 16px";
+        popup.style.inset = "auto 16px 16px 16px";
         popup.style.background = "#ffffff";
 
         if (this.header) {
@@ -94,7 +94,7 @@ export async function installMapStub(page: Page) {
     }
 
     class AdvancedMarkerElement {
-      map: MapInstance | null;
+      private mapInstance: MapInstance | null;
       position: { lat: number; lng: number };
       content: HTMLElement;
       private titleValue: string;
@@ -105,7 +105,7 @@ export async function installMapStub(page: Page) {
         title: string;
         content: HTMLElement;
       }) {
-        this.map = options.map;
+        this.mapInstance = options.map;
         this.position = options.position;
         this.content = options.content;
         this.titleValue = options.title;
@@ -115,6 +115,18 @@ export async function installMapStub(page: Page) {
         this.content.style.top = "24px";
         options.map.count += 1;
         options.map.element.append(this.content);
+      }
+
+      get map() {
+        return this.mapInstance;
+      }
+
+      set map(value: MapInstance | null) {
+        this.mapInstance = value;
+
+        if (!value) {
+          this.content.remove();
+        }
       }
 
       get title() {

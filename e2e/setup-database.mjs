@@ -11,14 +11,21 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is missing from .env.local");
 }
 
-const appUser = new URL(databaseUrl).username.replaceAll('"', '""');
-const admin = new Client({ database: "postgres" });
+function directDatabaseUrl(connectionString) {
+  const url = new URL(connectionString);
+  url.hostname = url.hostname.replace("-pooler", "");
+  return url.toString();
+}
+
+const admin = new Client({ connectionString: directDatabaseUrl(databaseUrl) });
 await admin.connect();
 await admin.query(`DROP DATABASE IF EXISTS ${testDatabase} WITH (FORCE)`);
-await admin.query(`CREATE DATABASE ${testDatabase} OWNER "${appUser}"`);
+await admin.query(`CREATE DATABASE ${testDatabase}`);
 await admin.end();
 
-const database = new Client({ connectionString: testDatabaseUrl(databaseUrl) });
+const database = new Client({
+  connectionString: directDatabaseUrl(testDatabaseUrl(databaseUrl)),
+});
 await database.connect();
 await database.query(await readFile(path.join(process.cwd(), "db/auth.sql"), "utf8"));
 
