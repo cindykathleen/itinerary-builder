@@ -1986,7 +1986,7 @@ export const schema = createSchema({
                    WHERE itinerary_id = $1
                      AND category_id IS NOT DISTINCT FROM $2::uuid
                      AND in_sidebar = true
-                     AND start_at IS NOT NULL
+                     AND ($3::uuid IS NULL OR start_at IS NOT NULL)
                  ) ELSE NULL END
                )
                RETURNING id, name, note, category_id, stop_id`
@@ -2007,7 +2007,7 @@ export const schema = createSchema({
                    WHERE itinerary_id = $1
                      AND category_id IS NOT DISTINCT FROM $2::uuid
                      AND in_sidebar = true
-                     AND start_at IS NULL
+                     AND ($3::uuid IS NULL OR start_at IS NULL)
                  ) ELSE NULL END
                )
                RETURNING id, name, note, category_id, stop_id`,
@@ -2182,7 +2182,10 @@ export const schema = createSchema({
                  AND siblings.category_id IS NOT DISTINCT FROM $2::uuid
                  AND siblings.in_sidebar = true
                  AND siblings.id <> activities.id
-                 AND (siblings.start_at IS NOT NULL) = (activities.start_at IS NOT NULL)
+                 AND (
+                   activities.stop_id IS NULL
+                   OR (siblings.start_at IS NOT NULL) = (activities.start_at IS NOT NULL)
+                 )
              )
              WHERE id = $1`,
             [args.id, activity.category_id],
@@ -2287,7 +2290,7 @@ export const schema = createSchema({
            SET start_at = (($3::date + $4::time) AT TIME ZONE $6),
                end_at = ((($3::date + $7::int) + $5::time) AT TIME ZONE $6),
                sidebar_position = CASE
-                 WHEN $8::boolean OR in_sidebar = false THEN sidebar_position
+                 WHEN $8::boolean OR in_sidebar = false OR stop_id IS NULL THEN sidebar_position
                  ELSE (
                    SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
                    FROM activities AS siblings
@@ -2396,7 +2399,7 @@ export const schema = createSchema({
            SET start_at = NULL,
                end_at = NULL,
                sidebar_position = CASE
-                 WHEN in_sidebar = false THEN sidebar_position
+                 WHEN in_sidebar = false OR stop_id IS NULL THEN sidebar_position
                  ELSE (
                    SELECT COALESCE(MAX(siblings.sidebar_position), -1) + 1
                    FROM activities AS siblings
@@ -2615,10 +2618,11 @@ export const schema = createSchema({
           await client.query("BEGIN");
           const currentResult = await client.query<{
             category_id: string | null;
+            stop_id: string | null;
             in_sidebar: boolean;
             scheduled: boolean;
           }>(
-            `SELECT category_id, in_sidebar, start_at IS NOT NULL AS scheduled
+            `SELECT category_id, stop_id, in_sidebar, start_at IS NOT NULL AS scheduled
              FROM activities
              WHERE id = $1
                AND itinerary_id = $2
@@ -2640,26 +2644,32 @@ export const schema = createSchema({
             });
           }
 
+          const staysOpen = current.stop_id === null;
           const siblings = await client.query<{ id: string; scheduled: boolean }>(
             `SELECT id, start_at IS NOT NULL AS scheduled
              FROM activities
              WHERE itinerary_id = $1
                AND category_id IS NOT DISTINCT FROM $2::uuid
                AND in_sidebar = true
-             ORDER BY (start_at IS NOT NULL), sidebar_position NULLS LAST, created_at, id
+             ORDER BY
+               CASE WHEN $3::uuid IS NULL THEN 0 ELSE (start_at IS NOT NULL)::int END,
+               sidebar_position NULLS LAST,
+               created_at,
+               id
              FOR UPDATE`,
-            [args.itineraryId, current.category_id],
+            [args.itineraryId, current.category_id, current.stop_id],
           );
           const ordered = siblings.rows.map((activity) => ({
             id: activity.id,
-            scheduled: activity.scheduled,
+            scheduled: staysOpen ? false : activity.scheduled,
           }));
+          const currentScheduled = staysOpen ? false : current.scheduled;
           let next = ordered;
 
           if (beforeId) {
             const before = ordered.find((activity) => activity.id === beforeId);
 
-            if (!before || before.scheduled !== current.scheduled) {
+            if (!before || before.scheduled !== currentScheduled) {
               throw new GraphQLError("Drop the activity within its own group.", {
                 extensions: { code: "BAD_USER_INPUT" },
               });
@@ -2678,13 +2688,13 @@ export const schema = createSchema({
             let lastGroupIndex = -1;
 
             for (let index = 0; index < without.length; index += 1) {
-              if (without[index].scheduled === current.scheduled) {
+              if (without[index].scheduled === currentScheduled) {
                 lastGroupIndex = index;
               }
             }
 
             const moved = [...without];
-            moved.splice(lastGroupIndex + 1, 0, { id: args.id, scheduled: current.scheduled });
+            moved.splice(lastGroupIndex + 1, 0, { id: args.id, scheduled: currentScheduled });
 
             if (moved.every((activity, index) => activity.id === ordered[index]?.id)) {
               await client.query("COMMIT");

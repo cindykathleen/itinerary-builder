@@ -35,10 +35,14 @@ function SubmitButton({ label, disabled }: { label: string; disabled?: boolean }
   );
 }
 
+function onItinerary(activity: SidebarActivity) {
+  return activity.stopId !== null && activity.startDate !== null;
+}
+
 function listedActivities(activities: SidebarActivity[]) {
   return [...activities]
     .sort((left, right) => {
-      const group = Number(left.startDate !== null) - Number(right.startDate !== null);
+      const group = Number(onItinerary(left)) - Number(onItinerary(right));
 
       if (group !== 0) {
         return group;
@@ -50,7 +54,7 @@ function listedActivities(activities: SidebarActivity[]) {
       id: activity.id,
       name: activity.name,
       note: activity.note,
-      scheduled: activity.startDate !== null,
+      scheduled: onItinerary(activity),
       stopId: activity.stopId,
       googlePlaceId: activity.googlePlaceId,
       googlePlaceName: activity.googlePlaceName,
