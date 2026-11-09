@@ -52,9 +52,16 @@ DATABASE_URL=postgres://user:password@localhost:5432/itinerary_builder_app
 BETTER_AUTH_SECRET=generate-a-long-random-secret
 BETTER_AUTH_URL=http://localhost:3000
 GOOGLE_PLACES_API_KEY=your-google-places-key
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key-id
+R2_ACCESS_KEY_SECRET=your-r2-secret-access-key
+R2_BUCKET_NAME=itinerary-builder-images
+NEXT_PUBLIC_R2_PUBLIC_URL=https://your-bucket.r2.dev
 ```
 
 `GOOGLE_PLACES_FIXTURES=1` stubs Google Places. End-to-end tests set it; leave it unset for a real key.
+
+Cover images upload to the Cloudflare R2 bucket named by `R2_BUCKET_NAME`. Create an R2 API token that can read and write objects in that bucket, then set `R2_ACCESS_KEY_ID` and `R2_ACCESS_KEY_SECRET`. `NEXT_PUBLIC_R2_PUBLIC_URL` is the bucket's public development URL, without a trailing slash.
 
 Install dependencies and start the app:
 

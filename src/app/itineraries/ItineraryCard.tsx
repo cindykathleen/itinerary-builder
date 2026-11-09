@@ -27,6 +27,7 @@ export default function ItineraryCard({
         <ItineraryCardMenu
           id={itinerary.id}
           name={itinerary.name}
+          photoUrl={itinerary.photoUrl}
           status={status}
         />
       </div>

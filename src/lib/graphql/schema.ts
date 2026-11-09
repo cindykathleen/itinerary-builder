@@ -1,7 +1,9 @@
 import { GraphQLError } from "graphql";
 import { createSchema } from "graphql-yoga";
 import type { PoolClient } from "pg";
+import { coverObjectKey } from "@/lib/cover-url";
 import pool from "@/lib/db";
+import { deleteCoverObject } from "@/lib/r2";
 import { getGooglePlace, GooglePlacesError, type GooglePlace } from "@/lib/google-places";
 import { reorderSidebarActivities } from "@/lib/sidebar-order";
 import { sectionNames } from "@/lib/sections";
@@ -58,11 +60,20 @@ const itineraryColumns = `
 const TRASH_RETENTION = "14 days";
 
 async function purgeExpiredTrash() {
-  await pool.query(
+  const deleted = await pool.query<{ photo_url: string | null }>(
     `DELETE FROM itineraries
      WHERE status = 'trashed'
-       AND trashed_at <= CURRENT_TIMESTAMP - $1::interval`,
+       AND trashed_at <= CURRENT_TIMESTAMP - $1::interval
+     RETURNING photo_url`,
     [TRASH_RETENTION],
+  );
+
+  await Promise.all(
+    deleted.rows.map((row) =>
+      deleteCoverObject(row.photo_url).catch((error) => {
+        console.error("Failed to delete an expired itinerary cover.", error);
+      }),
+    ),
   );
 }
 
@@ -567,6 +578,7 @@ export const schema = createSchema({
         id: ID!
         sections: [ItinerarySectionInput!]!
       ): [ItinerarySection!]!
+      setItineraryCover(id: ID!, photoUrl: String): Itinerary!
       deleteItinerary(id: ID!): Boolean!
       createCategory(
         itineraryId: ID!
@@ -1399,6 +1411,68 @@ export const schema = createSchema({
           client.release();
         }
       },
+      setItineraryCover: async (
+        _parent,
+        args: { id: string; photoUrl?: string | null },
+        context: GraphQLContext,
+      ) => {
+        if (!context.userId) {
+          throw new GraphQLError("You must be signed in to update itineraries.", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const photoUrl = args.photoUrl?.trim() || null;
+
+        if (photoUrl && !coverObjectKey(photoUrl)) {
+          throw new GraphQLError("Cover image must be stored on this app's bucket.", {
+            extensions: { code: "BAD_USER_INPUT" },
+          });
+        }
+
+        const client = await pool.connect();
+
+        try {
+          await client.query("BEGIN");
+          const existing = await client.query<{ photo_url: string | null }>(
+            `SELECT photo_url
+             FROM itineraries
+             WHERE id = $1 AND owner_id = $2
+             FOR UPDATE`,
+            [args.id, context.userId],
+          );
+
+          if (!existing.rows[0]) {
+            throw new GraphQLError("Itinerary not found.", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+
+          const result = await client.query<ItineraryRow>(
+            `UPDATE itineraries
+             SET photo_url = $1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING ${itineraryColumns}`,
+            [photoUrl, args.id],
+          );
+          await client.query("COMMIT");
+          const previous = existing.rows[0].photo_url;
+
+          if (previous && previous !== photoUrl) {
+            await deleteCoverObject(previous).catch((error) => {
+              console.error("Failed to delete the previous cover.", error);
+            });
+          }
+
+          return toItinerary(result.rows[0]);
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      },
       deleteItinerary: async (
         _parent,
         args: { id: string },
@@ -1410,10 +1484,10 @@ export const schema = createSchema({
           });
         }
 
-        const result = await pool.query(
+        const result = await pool.query<{ photo_url: string | null }>(
           `DELETE FROM itineraries
            WHERE id = $1 AND owner_id = $2
-           RETURNING id`,
+           RETURNING photo_url`,
           [args.id, context.userId],
         );
 
@@ -1422,6 +1496,10 @@ export const schema = createSchema({
             extensions: { code: "NOT_FOUND" },
           });
         }
+
+        await deleteCoverObject(result.rows[0].photo_url).catch((error) => {
+          console.error("Failed to delete the itinerary cover.", error);
+        });
 
         return true;
       },

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
+import { COVER_MAX_BYTES } from "@/lib/cover-url";
 import type { ItineraryListStatus } from "./ItinerariesSidebar";
 import {
   archiveItinerary,
@@ -9,6 +10,7 @@ import {
   permanentlyDeleteItinerary,
   renameItinerary,
   restoreItinerary,
+  uploadItineraryCover,
 } from "./actions";
 import { closeDialogOnEscape } from "./dialog";
 import styles from "./ItineraryCardMenu.module.css";
@@ -19,18 +21,23 @@ type ConfirmAction = (formData: FormData) => void | Promise<void>;
 export default function ItineraryCardMenu({
   id,
   name,
+  photoUrl,
   status,
 }: {
   id: string;
   name: string;
+  photoUrl: string | null;
   status: ItineraryListStatus;
 }) {
   const renameDialogRef = useRef<HTMLDialogElement>(null);
   const confirmDialogRef = useRef<HTMLDialogElement>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const pendingActionRef = useRef<ConfirmAction | null>(null);
   const [draftName, setDraftName] = useState(name);
   const [confirmMessage, setConfirmMessage] = useState("");
+  const [coverError, setCoverError] = useState("");
+  const [coverPending, startCoverUpload] = useTransition();
 
   const openRenameDialog = () => {
     setDraftName(name);
@@ -58,6 +65,30 @@ export default function ItineraryCardMenu({
     confirmDialogRef.current?.close();
   };
 
+  const chooseCover = () => {
+    detailsRef.current?.removeAttribute("open");
+    coverInputRef.current?.click();
+  };
+
+  const uploadCover = (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    if (file.size > COVER_MAX_BYTES) {
+      setCoverError("Cover images must be 5 MB or smaller.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("id", id);
+    formData.set("file", file);
+    startCoverUpload(async () => {
+      const result = await uploadItineraryCover(formData);
+      setCoverError(result?.error ?? "");
+    });
+  };
+
   const saveRename = async (formData: FormData) => {
     await renameItinerary(formData);
     closeRenameDialog();
@@ -73,7 +104,8 @@ export default function ItineraryCardMenu({
 
   return (
     <>
-      <details ref={detailsRef} className={styles.menu}>
+      <div className={styles.menu}>
+      <details ref={detailsRef}>
         <summary className={styles.trigger} aria-label={`Actions for ${name}`}>
           <span aria-hidden="true">⋮</span>
         </summary>
@@ -87,6 +119,16 @@ export default function ItineraryCardMenu({
                   onClick={openRenameDialog}
                 >
                   Rename
+                </button>
+              </li>
+              <li>
+                <button
+                  className={styles.action}
+                  type="button"
+                  onClick={chooseCover}
+                  disabled={coverPending}
+                >
+                  {photoUrl ? "Edit cover photo" : "Upload cover photo"}
                 </button>
               </li>
               <li>
@@ -172,6 +214,26 @@ export default function ItineraryCardMenu({
           ) : null}
         </ul>
       </details>
+      {status === "active" ? (
+        <input
+          ref={coverInputRef}
+          className={styles.coverFile}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={coverPending}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            uploadCover(file);
+          }}
+        />
+      ) : null}
+      {coverError ? (
+        <p className={styles.coverError} role="alert">
+          {coverError}
+        </p>
+      ) : null}
+      </div>
 
       {status === "active" ? (
         <dialog

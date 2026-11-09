@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { COVER_MAX_BYTES, coverContentType, coverExtension } from "@/lib/cover-url";
 import { executeGraphQL } from "@/lib/graphql/execute";
+import { deleteCoverObject, uploadCoverObject } from "@/lib/r2";
 
 const updateItineraryStatusMutation = /* GraphQL */ `
   mutation UpdateItineraryStatus($id: ID!, $status: ItineraryStatus!) {
@@ -207,6 +209,77 @@ export async function updateItinerary(formData: FormData) {
   });
   revalidatePath("/itineraries");
   revalidatePath(`/itineraries/${id}`);
+}
+
+const setItineraryCoverMutation = /* GraphQL */ `
+  mutation SetItineraryCover($id: ID!, $photoUrl: String) {
+    setItineraryCover(id: $id, photoUrl: $photoUrl) {
+      id
+      photoUrl
+    }
+  }
+`;
+
+function revalidateCover(id: string) {
+  revalidatePath("/itineraries");
+  revalidatePath(`/itineraries/${id}`);
+}
+
+function coverUploadMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+  if (/bad record mac|EPROTO|ECONNRESET|ETIMEDOUT|socket hang up/i.test(detail)) {
+    return "The cover could not be uploaded. Please try again.";
+  }
+  return detail && detail !== "The cover could not be uploaded."
+    ? detail
+    : "The cover could not be uploaded.";
+}
+
+export async function uploadItineraryCover(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const file = formData.get("file");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a JPEG, PNG, or WebP image." };
+  }
+
+  if (file.size > COVER_MAX_BYTES) {
+    return { error: "Cover images must be 5 MB or smaller." };
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const contentType = coverContentType(bytes, file.type);
+
+  if (!contentType) {
+    return { error: "Cover images must be JPEG, PNG, or WebP." };
+  }
+
+  let photoUrl: string;
+
+  try {
+    photoUrl = await uploadCoverObject(bytes, contentType, coverExtension(contentType));
+  } catch (error) {
+    console.error("Cover upload failed.", error);
+    return { error: coverUploadMessage(error) };
+  }
+
+  try {
+    await executeGraphQL(setItineraryCoverMutation, { id, photoUrl });
+  } catch (error) {
+    await deleteCoverObject(photoUrl).catch(() => {});
+    return {
+      error: error instanceof Error ? error.message : "The cover could not be saved.",
+    };
+  }
+
+  revalidateCover(id);
+}
+
+export async function removeItineraryCover(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+
+  await executeGraphQL(setItineraryCoverMutation, { id, photoUrl: null });
+  revalidateCover(id);
 }
 
 const createCategoryMutation = /* GraphQL */ `

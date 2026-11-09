@@ -20,7 +20,7 @@
 
 .trigger:hover,
 .trigger:focus-visible,
-.menu[open] .trigger {
+.menu:has(details[open]) .trigger {
   background-color: var(--foreground);
 }
 
@@ -32,7 +32,7 @@
   content: "";
 }
 
-.menu[open] {
+.menu:has(details[open]) {
   z-index: 2;
 }
 
@@ -41,7 +41,7 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 2;
-  min-width: 184px;
+  min-width: 216px;
   padding: 8px 0;
   border: 1px solid var(--surface);
   border-radius: 8px;
@@ -62,4 +62,26 @@
 .action:hover {
   border: none;
   background-color: var(--background);
+}
+
+.coverFile {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.coverError {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 3;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--foreground);
+  box-shadow: 0 8px 24px rgba(26, 32, 44, 0.12);
+  font-size: 16px;
 }

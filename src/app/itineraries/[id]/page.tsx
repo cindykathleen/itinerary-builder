@@ -25,6 +25,7 @@ const itineraryQuery = /* GraphQL */ `
       timeFormat
       scheduleConfigured
       planningMode
+      photoUrl
       sections {
         id
         name
@@ -89,6 +90,7 @@ type ItineraryQuery = {
     timeFormat: string;
     scheduleConfigured: boolean;
     planningMode: "timeline" | "sections";
+    photoUrl: string | null;
     sections: {
       id: string;
       name: string;
@@ -248,6 +250,7 @@ export default async function ItineraryPage({
               dayEnd: itinerary.dayEnd,
               timeInterval: itinerary.timeInterval,
               planningMode: itinerary.planningMode,
+              photoUrl: itinerary.photoUrl,
               sections: itinerary.sections.map((section) => ({
                 id: section.id,
                 name: section.name,

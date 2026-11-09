@@ -12,6 +12,7 @@
     "db:seed": "node --env-file=.env.local db/seed.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
     "@neon/config": "^1.10.2",
     "@neon/env": "^1.6.9",
     "better-auth": "^1.7.4",

@@ -5,6 +5,7 @@ import type { SubmitEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { sectionNames } from "@/lib/sections";
 import { updateItinerary } from "../actions";
+import CoverControls from "../CoverControls";
 import { closeDialogOnEscape } from "../dialog";
 import dialogStyles from "../dialog.module.css";
 import SectionListEditor from "../SectionListEditor";
@@ -75,6 +76,7 @@ export default function ItineraryEdit({
     dayEnd: string;
     timeInterval: number;
     planningMode: PlanningMode;
+    photoUrl: string | null;
     sections: {
       id: string;
       name: string;
@@ -187,6 +189,15 @@ export default function ItineraryEdit({
           </div>
 
           <div className={dialogStyles.body}>
+            <div className={dialogStyles.field}>
+              <span>Cover</span>
+              {itinerary.photoUrl ? (
+                <img className={styles.coverPreview} src={itinerary.photoUrl} alt="" />
+              ) : null}
+              <p className={dialogStyles.note}>JPEG, PNG, or WebP. 5 MB maximum.</p>
+              <CoverControls itineraryId={itinerary.id} photoUrl={itinerary.photoUrl} />
+            </div>
+
             <div className={dialogStyles.field}>
               <label htmlFor="edit-name">
                 Name <span className="required">*</span>
